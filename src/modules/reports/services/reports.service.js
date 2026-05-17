@@ -15,22 +15,30 @@ export const dailyPlanTotal = async ({ date }) => {
     {
       $group: {
         _id: "$car",
+        driverId: { $first: "$driver" },
         amount: { $sum: "$amount" },
         expected: { $sum: "$expectedPlan" },
-        count: { $sum: 1 },
       },
     },
     { $lookup: { from: "cars", localField: "_id", foreignField: "_id", as: "car" } },
     { $unwind: { path: "$car", preserveNullAndEmptyArrays: true } },
+    { $lookup: { from: "drivers", localField: "driverId", foreignField: "_id", as: "driver" } },
+    { $unwind: { path: "$driver", preserveNullAndEmptyArrays: true } },
     {
       $project: {
         _id: 0,
         carId: "$_id",
         plateNumber: "$car.plateNumber",
         model: "$car.model",
+        driverName: {
+          $cond: [
+            { $ifNull: ["$driver", false] },
+            { $concat: ["$driver.firstName", " ", "$driver.lastName"] },
+            null,
+          ],
+        },
         amount: 1,
         expected: 1,
-        count: 1,
       },
     },
     { $sort: { plateNumber: 1 } },
