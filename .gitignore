@@ -5,3 +5,5 @@ dist
 .DS_Store
 .idea
 .vscode
+uploads
+package-lock.json
