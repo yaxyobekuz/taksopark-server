@@ -23,7 +23,7 @@ export const list = async ({ driverId, carId, fromDate, toDate, paymentStatus, p
   const [items, total] = await Promise.all([
     Fine.find(filter)
       .populate("driver", "firstName lastName phone")
-      .populate("car", "plateNumber model")
+      .populate("car", "plateNumber model notes")
       .sort({ issueDate: -1 })
       .skip(skip)
       .limit(limit),
@@ -35,7 +35,7 @@ export const list = async ({ driverId, carId, fromDate, toDate, paymentStatus, p
 export const getById = async (id) => {
   const fine = await Fine.findById(id)
     .populate("driver", "firstName lastName phone tariff")
-    .populate("car", "plateNumber model");
+    .populate("car", "plateNumber model notes");
   if (!fine) throw new ApiError(404, "Jarima topilmadi");
   return fine;
 };

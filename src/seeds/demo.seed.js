@@ -106,7 +106,7 @@ const seed = async () => {
     drivers.map((d) => Car.updateOne({ _id: d.car }, { $set: { currentDriver: d._id } })),
   );
 
-  // Kunlik to'lovlar — Ali va Bobur uchun
+  // Kunlik to'lovlar - Ali va Bobur uchun
   const aliPayments = [
     { driver: drivers[0]._id, car: drivers[0].car, date: daysAgo(9), amount: 500_000 },
     { driver: drivers[0]._id, car: drivers[0].car, date: daysAgo(8), amount: 500_000 },
@@ -196,7 +196,7 @@ const seed = async () => {
 
   logger.info("Fines yaratildi");
 
-  // 1 ta zarar — partial
+  // 1 ta zarar - partial
   const davronDamage = await Damage.create({
     driver: drivers[2]._id,
     car: drivers[2].car,
@@ -256,7 +256,7 @@ const seed = async () => {
       category: "Ta'mirlash",
       amount: 800_000,
       date: daysAgo(7),
-      note: "Cobalt — moy almashtirish, balon",
+      note: "Cobalt - moy almashtirish, balon",
       createdBy: owner._id,
     },
   ]);
