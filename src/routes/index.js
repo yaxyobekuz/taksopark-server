@@ -2,6 +2,16 @@ import { Router } from "express";
 import authRouter from "../modules/auth/auth.routes.js";
 import usersRouter from "../modules/users/users.routes.js";
 import activityLogsRouter from "../modules/activityLogs/activityLogs.routes.js";
+import carsRouter from "../modules/cars/cars.routes.js";
+import driversRouter from "../modules/drivers/drivers.routes.js";
+import paymentsRouter from "../modules/payments/payments.routes.js";
+import finesRouter from "../modules/fines/fines.routes.js";
+import damagesRouter from "../modules/damages/damages.routes.js";
+import cyclesRouter from "../modules/cycles/cycles.routes.js";
+import reportsRouter from "../modules/reports/reports.routes.js";
+import finePaymentsRouter from "../modules/finePayments/finePayments.routes.js";
+import damagePaymentsRouter from "../modules/damagePayments/damagePayments.routes.js";
+import transactionsRouter from "../modules/transactions/transactions.routes.js";
 
 const router = Router();
 
@@ -12,5 +22,15 @@ router.get("/health", (_req, res) =>
 router.use("/auth", authRouter);
 router.use("/users", usersRouter);
 router.use("/activity-logs", activityLogsRouter);
+router.use("/cars", carsRouter);
+router.use("/drivers", driversRouter);
+router.use("/payments", paymentsRouter);
+router.use("/fines", finesRouter);
+router.use("/damages", damagesRouter);
+router.use("/cycles", cyclesRouter);
+router.use("/reports", reportsRouter);
+router.use("/fine-payments", finePaymentsRouter);
+router.use("/damage-payments", damagePaymentsRouter);
+router.use("/transactions", transactionsRouter);
 
 export default router;
