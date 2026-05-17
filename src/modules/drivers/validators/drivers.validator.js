@@ -42,10 +42,3 @@ export const updateSchema = z.object({
     notes: z.string().optional(),
   }),
 });
-
-export const blockSchema = z.object({
-  params: z.object({ id: objectId }),
-  body: z.object({
-    reason: z.string().trim().min(1, "Sabab kerak"),
-  }),
-});

@@ -124,32 +124,6 @@ export const update = async (id, body) => {
   return driver;
 };
 
-export const block = async (id, reason) => {
-  const driver = await Driver.findById(id);
-  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  if (driver.status === DRIVER_STATUS.BLOCKED) {
-    throw new ApiError(409, "Haydovchi allaqachon bloklangan");
-  }
-  driver.status = DRIVER_STATUS.BLOCKED;
-  driver.blockReason = reason;
-  driver.blockedAt = new Date();
-  await driver.save();
-  return driver;
-};
-
-export const unblock = async (id) => {
-  const driver = await Driver.findById(id);
-  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  if (driver.status !== DRIVER_STATUS.BLOCKED) {
-    throw new ApiError(409, "Haydovchi bloklangan emas");
-  }
-  driver.status = DRIVER_STATUS.ACTIVE;
-  driver.blockReason = "";
-  driver.blockedAt = null;
-  await driver.save();
-  return driver;
-};
-
 export const softRemove = async (id) => {
   const driver = await Driver.findById(id);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
