@@ -48,6 +48,18 @@ export const dailyPlanTotal = async ({ date }) => {
   return { date: target, totalAmount, totalExpected, perCar: rows };
 };
 
+export const minYear = async () => {
+  const [payment, fine, damage] = await Promise.all([
+    DailyPayment.findOne().sort({ date: 1 }).select("date").lean(),
+    Fine.findOne().sort({ issueDate: 1 }).select("issueDate").lean(),
+    Damage.findOne().sort({ incidentDate: 1 }).select("incidentDate").lean(),
+  ]);
+  const dates = [payment?.date, fine?.issueDate, damage?.incidentDate].filter(Boolean);
+  if (!dates.length) return { year: new Date().getFullYear() };
+  const earliest = dates.reduce((min, d) => (d < min ? d : min));
+  return { year: new Date(earliest).getFullYear() };
+};
+
 const oid = (id) => new mongoose.Types.ObjectId(id);
 
 export const finance = async ({ fromDate, toDate, carId }) => {
