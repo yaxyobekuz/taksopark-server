@@ -3,7 +3,6 @@ import { ALL_TARIFFS } from "../constants/tariffs.js";
 
 export const DRIVER_STATUS = Object.freeze({
   ACTIVE: "active",
-  BLOCKED: "blocked",
   ARCHIVED: "archived",
 });
 
@@ -31,8 +30,6 @@ const driverSchema = new mongoose.Schema(
       default: DRIVER_STATUS.ACTIVE,
       index: true,
     },
-    blockReason: { type: String, default: "" },
-    blockedAt: { type: Date, default: null },
 
     notes: { type: String, default: "" },
   },

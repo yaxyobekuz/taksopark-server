@@ -7,7 +7,6 @@ export const PERMISSIONS = Object.freeze({
   DRIVERS_CREATE: "drivers.create",
   DRIVERS_UPDATE: "drivers.update",
   DRIVERS_DELETE: "drivers.delete",
-  DRIVERS_BLOCK: "drivers.block",
 
   CARS_READ: "cars.read",
   CARS_CREATE: "cars.create",
@@ -50,7 +49,6 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.DRIVERS_CREATE]: { label: "Haydovchi qo'shish", group: "drivers" },
   [PERMISSIONS.DRIVERS_UPDATE]: { label: "Haydovchini tahrirlash", group: "drivers" },
   [PERMISSIONS.DRIVERS_DELETE]: { label: "Haydovchini o'chirish", group: "drivers" },
-  [PERMISSIONS.DRIVERS_BLOCK]: { label: "Haydovchini bloklash", group: "drivers" },
 
   [PERMISSIONS.CARS_READ]: { label: "Mashinalarni ko'rish", group: "cars" },
   [PERMISSIONS.CARS_CREATE]: { label: "Mashina qo'shish", group: "cars" },
