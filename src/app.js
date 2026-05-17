@@ -1,3 +1,4 @@
+import path from "node:path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -17,7 +18,7 @@ const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(
   cors({
     origin: env.CLIENT_URL,
@@ -30,6 +31,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(env.COOKIE_SECRET));
 
 if (!isProd) app.use(morgan("dev"));
+
+app.use("/uploads", express.static(path.resolve("uploads"), { maxAge: "30d" }));
 
 app.use(generalLimiter);
 app.use("/api", auditLog, apiRouter);
