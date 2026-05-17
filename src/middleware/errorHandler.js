@@ -1,10 +1,11 @@
 import { ZodError } from "zod";
 import mongoose from "mongoose";
+import multer from "multer";
 import ApiError from "../utils/ApiError.js";
 import logger from "../config/logger.js";
 import { isProd } from "../config/env.js";
 
-// Central error handler — every error funnels through here
+// Central error handler - every error funnels through here
 // eslint-disable-next-line no-unused-vars
 const errorHandler = (err, req, res, _next) => {
   let statusCode = 500;
@@ -36,6 +37,12 @@ const errorHandler = (err, req, res, _next) => {
     message = "Bunday yozuv allaqachon mavjud";
     code = "DUPLICATE";
     details = err.keyValue;
+  } else if (err instanceof multer.MulterError) {
+    statusCode = 400;
+    code = "UPLOAD_ERROR";
+    if (err.code === "LIMIT_FILE_SIZE") message = "Fayl hajmi 5 MB dan oshmasligi kerak";
+    else if (err.code === "LIMIT_FILE_COUNT") message = "Fayllar soni juda ko'p";
+    else message = "Fayl yuklashda xatolik";
   }
 
   if (statusCode >= 500) logger.error({ err, url: req.originalUrl }, "Unhandled error");
