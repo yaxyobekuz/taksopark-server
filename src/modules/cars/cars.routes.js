@@ -8,8 +8,10 @@ import {
   idSchema,
   createSchema,
   updateSchema,
+  listExpiringSchema,
 } from "./validators/cars.validator.js";
 import list from "./handlers/list.handler.js";
+import listExpiring from "./handlers/listExpiring.handler.js";
 import getById from "./handlers/getById.handler.js";
 import create from "./handlers/create.handler.js";
 import update from "./handlers/update.handler.js";
@@ -17,6 +19,7 @@ import remove from "./handlers/remove.handler.js";
 
 const router = Router();
 
+router.get("/expiring", requireAuth, requirePermission(PERMISSIONS.CARS_READ), validate(listExpiringSchema), listExpiring);
 router.get("/", requireAuth, requirePermission(PERMISSIONS.CARS_READ), validate(listSchema), list);
 router.get("/:id", requireAuth, requirePermission(PERMISSIONS.CARS_READ), validate(idSchema), getById);
 router.post("/", requireAuth, requirePermission(PERMISSIONS.CARS_CREATE), validate(createSchema), create);

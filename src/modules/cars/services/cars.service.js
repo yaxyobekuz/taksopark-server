@@ -43,6 +43,8 @@ export const create = async (body) => {
     plateNumber: plate,
     model: body.model,
     notes: body.notes || "",
+    licenseExpiryDate: body.licenseExpiryDate ?? null,
+    powerOfAttorneyExpiryDate: body.powerOfAttorneyExpiryDate ?? null,
   });
 };
 
@@ -63,8 +65,31 @@ export const update = async (id, body) => {
   if (body.model !== undefined) car.model = body.model;
   if (body.notes !== undefined) car.notes = body.notes;
   if (body.isActive !== undefined) car.isActive = body.isActive;
+  if (body.licenseExpiryDate !== undefined) car.licenseExpiryDate = body.licenseExpiryDate || null;
+  if (body.powerOfAttorneyExpiryDate !== undefined) car.powerOfAttorneyExpiryDate = body.powerOfAttorneyExpiryDate || null;
   await car.save();
   return car;
+};
+
+export const listExpiring = async ({ limit = 5, days = 30 }) => {
+  const cutoff = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const items = await Car.find({
+    isActive: true,
+    $or: [
+      { licenseExpiryDate: { $ne: null, $lte: cutoff } },
+      { powerOfAttorneyExpiryDate: { $ne: null, $lte: cutoff } },
+    ],
+  })
+    .populate("currentDriver", "firstName lastName phone")
+    .lean();
+
+  const minOf = (c) =>
+    Math.min(
+      c.licenseExpiryDate ? new Date(c.licenseExpiryDate).getTime() : Infinity,
+      c.powerOfAttorneyExpiryDate ? new Date(c.powerOfAttorneyExpiryDate).getTime() : Infinity,
+    );
+  items.sort((a, b) => minOf(a) - minOf(b));
+  return items.slice(0, limit);
 };
 
 export const softRemove = async (id) => {
