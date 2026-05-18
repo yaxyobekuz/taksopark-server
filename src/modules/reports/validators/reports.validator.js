@@ -15,11 +15,3 @@ export const financeSchema = z.object({
     carId: objectId.optional(),
   }),
 });
-
-export const driverStatementSchema = z.object({
-  params: z.object({ driverId: objectId }),
-  query: z.object({
-    fromDate: z.string().optional(),
-    toDate: z.string().optional(),
-  }),
-});

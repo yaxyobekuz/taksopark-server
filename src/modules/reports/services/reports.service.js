@@ -5,7 +5,6 @@ import Damage from "../../../models/damage.model.js";
 import MonthlyCycle, { CYCLE_STATUS } from "../../../models/monthlyCycle.model.js";
 import Driver from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
-import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent, endOfDayTashkent, daysBetween } from "../../../utils/timezone.js";
 
 export const dailyPlanTotal = async ({ date }) => {
@@ -162,34 +161,4 @@ export const finance = async ({ fromDate, toDate, carId }) => {
   );
 
   return { from, to, rows, totals };
-};
-
-export const driverStatement = async (driverId, { fromDate, toDate }) => {
-  const driver = await Driver.findById(driverId).populate("car", "plateNumber model");
-  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  const filter = { driver: driver._id };
-  if (fromDate || toDate) {
-    filter.date = {};
-    if (fromDate) filter.date.$gte = startOfDayTashkent(fromDate);
-    if (toDate) filter.date.$lte = endOfDayTashkent(toDate);
-  }
-  const fineFilter = { driver: driver._id };
-  if (fromDate || toDate) {
-    fineFilter.issueDate = {};
-    if (fromDate) fineFilter.issueDate.$gte = startOfDayTashkent(fromDate);
-    if (toDate) fineFilter.issueDate.$lte = endOfDayTashkent(toDate);
-  }
-  const damageFilter = { driver: driver._id };
-  if (fromDate || toDate) {
-    damageFilter.incidentDate = {};
-    if (fromDate) damageFilter.incidentDate.$gte = startOfDayTashkent(fromDate);
-    if (toDate) damageFilter.incidentDate.$lte = endOfDayTashkent(toDate);
-  }
-  const [payments, fines, damages, cycles] = await Promise.all([
-    DailyPayment.find(filter).sort({ date: -1 }),
-    Fine.find(fineFilter).sort({ issueDate: -1 }),
-    Damage.find(damageFilter).sort({ incidentDate: -1 }),
-    MonthlyCycle.find({ driver: driver._id }).sort({ cycleNumber: -1 }),
-  ]);
-  return { driver, payments, fines, damages, cycles };
 };
