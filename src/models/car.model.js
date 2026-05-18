@@ -7,6 +7,8 @@ const carSchema = new mongoose.Schema(
     notes: { type: String, trim: true, default: "" },
     isActive: { type: Boolean, default: true, index: true },
     currentDriver: { type: mongoose.Schema.Types.ObjectId, ref: "Driver", default: null, index: true },
+    licenseExpiryDate: { type: Date, default: null, index: true },
+    powerOfAttorneyExpiryDate: { type: Date, default: null, index: true },
   },
   { timestamps: true },
 );
