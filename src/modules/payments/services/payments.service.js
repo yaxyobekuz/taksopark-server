@@ -2,7 +2,7 @@ import DailyPayment from "../../../models/dailyPayment.model.js";
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
 import MonthlyCycle from "../../../models/monthlyCycle.model.js";
 import ApiError from "../../../utils/ApiError.js";
-import { TARIFFS } from "../../../constants/tariffs.js";
+import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
 import { ensureCurrentCycle } from "../../cycles/services/cycles.service.js";
@@ -44,32 +44,35 @@ export const list = async ({ driverId, carId, fromDate, toDate, page = 1, limit 
 
 export const todayTotal = async ({ date }) => {
   const target = startOfDayTashkent(date || new Date());
-  const rows = await DailyPayment.aggregate([
+
+  const drivers = await Driver.find({
+    status: DRIVER_STATUS.ACTIVE,
+    car: { $ne: null },
+  })
+    .populate("car", "plateNumber model")
+    .lean();
+
+  const paidRows = await DailyPayment.aggregate([
     { $match: { date: target } },
-    {
-      $group: {
-        _id: "$car",
-        amount: { $sum: "$amount" },
-        expected: { $sum: "$expectedPlan" },
-      },
-    },
-    { $lookup: { from: "cars", localField: "_id", foreignField: "_id", as: "car" } },
-    { $unwind: { path: "$car", preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 0,
-        carId: "$_id",
-        plateNumber: "$car.plateNumber",
-        model: "$car.model",
-        amount: 1,
-        expected: 1,
-      },
-    },
-    { $sort: { plateNumber: 1 } },
+    { $group: { _id: "$car", amount: { $sum: "$amount" } } },
   ]);
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
-  const totalExpected = rows.reduce((s, r) => s + r.expected, 0);
-  return { date: target, totalAmount, totalExpected, perCar: rows };
+  const paidByCar = new Map(paidRows.map((r) => [String(r._id), r.amount]));
+
+  const perCar = drivers
+    .filter((d) => d.car)
+    .map((d) => ({
+      carId: String(d.car._id),
+      plateNumber: d.car.plateNumber,
+      model: d.car.model,
+      expected: TARIFF_CONFIG[d.tariff]?.dailyPlan || 0,
+      amount: paidByCar.get(String(d.car._id)) || 0,
+    }))
+    .sort((a, b) => (a.plateNumber || "").localeCompare(b.plateNumber || ""));
+
+  const totalExpected = perCar.reduce((s, r) => s + r.expected, 0);
+  const totalAmount = perCar.reduce((s, r) => s + r.amount, 0);
+
+  return { date: target, totalAmount, totalExpected, perCar };
 };
 
 export const create = async (body, currentUser) => {
