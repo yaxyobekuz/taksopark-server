@@ -5,46 +5,41 @@ import Damage from "../../../models/damage.model.js";
 import MonthlyCycle, { CYCLE_STATUS } from "../../../models/monthlyCycle.model.js";
 import Driver from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
+import { TARIFF_CONFIG } from "../../../constants/tariffs.js";
 import { startOfDayTashkent, endOfDayTashkent, daysBetween } from "../../../utils/timezone.js";
 
 export const dailyPlanTotal = async ({ date }) => {
   const target = startOfDayTashkent(date || new Date());
-  const rows = await DailyPayment.aggregate([
+
+  const drivers = await Driver.find({
+    status: "active",
+    car: { $ne: null },
+  })
+    .populate("car", "plateNumber model")
+    .lean();
+
+  const paidRows = await DailyPayment.aggregate([
     { $match: { date: target } },
-    {
-      $group: {
-        _id: "$car",
-        driverId: { $first: "$driver" },
-        amount: { $sum: "$amount" },
-        expected: { $sum: "$expectedPlan" },
-      },
-    },
-    { $lookup: { from: "cars", localField: "_id", foreignField: "_id", as: "car" } },
-    { $unwind: { path: "$car", preserveNullAndEmptyArrays: true } },
-    { $lookup: { from: "drivers", localField: "driverId", foreignField: "_id", as: "driver" } },
-    { $unwind: { path: "$driver", preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 0,
-        carId: "$_id",
-        plateNumber: "$car.plateNumber",
-        model: "$car.model",
-        driverName: {
-          $cond: [
-            { $ifNull: ["$driver", false] },
-            { $concat: ["$driver.firstName", " ", "$driver.lastName"] },
-            null,
-          ],
-        },
-        amount: 1,
-        expected: 1,
-      },
-    },
-    { $sort: { plateNumber: 1 } },
+    { $group: { _id: "$car", amount: { $sum: "$amount" } } },
   ]);
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
-  const totalExpected = rows.reduce((s, r) => s + r.expected, 0);
-  return { date: target, totalAmount, totalExpected, perCar: rows };
+  const paidByCar = new Map(paidRows.map((r) => [String(r._id), r.amount]));
+
+  const perCar = drivers
+    .filter((d) => d.car)
+    .map((d) => ({
+      carId: String(d.car._id),
+      plateNumber: d.car.plateNumber,
+      model: d.car.model,
+      driverName: `${d.firstName} ${d.lastName}`.trim(),
+      expected: TARIFF_CONFIG[d.tariff]?.dailyPlan || 0,
+      amount: paidByCar.get(String(d.car._id)) || 0,
+    }))
+    .sort((a, b) => (a.plateNumber || "").localeCompare(b.plateNumber || ""));
+
+  const totalExpected = perCar.reduce((s, r) => s + r.expected, 0);
+  const totalAmount = perCar.reduce((s, r) => s + r.amount, 0);
+
+  return { date: target, totalAmount, totalExpected, perCar };
 };
 
 export const minYear = async () => {
