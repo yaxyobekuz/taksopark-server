@@ -34,7 +34,7 @@ const seed = async () => {
   const owner = await User.findOne({ username: "owner" });
   if (!owner) throw new Error("Owner user yo'q. Avval npm run seed:owner");
 
-  // 4 ta mashina (har xil muddat holatlari — widget va badge'larni sinash uchun)
+  // 4 ta mashina (har xil muddat holatlari - widget va badge'larni sinash uchun)
   const inDays = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
   const cars = await Car.insertMany([
     {
