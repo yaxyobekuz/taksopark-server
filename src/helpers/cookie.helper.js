@@ -9,7 +9,7 @@ export const setRefreshCookie = (res, token) => {
     httpOnly: true,
     secure: isProd,
     sameSite: isProd ? "none" : "lax",
-    domain: env.COOKIE_DOMAIN,
+    domain: env.COOKIE_DOMAIN || undefined,
     path: "/api/auth",
     maxAge: REFRESH_MAX_AGE,
     signed: true,
@@ -21,7 +21,7 @@ export const clearRefreshCookie = (res) => {
     httpOnly: true,
     secure: isProd,
     sameSite: isProd ? "none" : "lax",
-    domain: env.COOKIE_DOMAIN,
+    domain: env.COOKIE_DOMAIN || undefined,
     path: "/api/auth",
     signed: true,
   });

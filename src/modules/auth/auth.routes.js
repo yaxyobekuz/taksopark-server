@@ -15,7 +15,7 @@ import registerUser from "./handlers/registerUser.handler.js";
 const router = Router();
 
 router.post("/login", authLimiter, validate(loginSchema), login);
-router.post("/refresh", authLimiter, refresh);
+router.post("/refresh", refresh);
 router.post("/logout", logout);
 router.get("/me", requireAuth, me);
 router.post(
