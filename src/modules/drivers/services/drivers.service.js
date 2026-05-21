@@ -3,10 +3,10 @@ import Car from "../../../models/car.model.js";
 import DailyPayment from "../../../models/dailyPayment.model.js";
 import Fine from "../../../models/fine.model.js";
 import Damage from "../../../models/damage.model.js";
-import MonthlyCycle, { CYCLE_STATUS } from "../../../models/monthlyCycle.model.js";
+import Oylik, { OYLIK_STATUS } from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
-import { startOfDayTashkent, daysBetween } from "../../../utils/timezone.js";
+import { startOfDayTashkent, daysBetween, addDays } from "../../../utils/timezone.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -15,11 +15,52 @@ export const getActiveTariffPhase = (driver, asOf = new Date()) => {
   if (driver.tariff === TARIFFS.DEPOSIT) {
     return { phase: "deposit", dailyPlan: cfg.dailyPlan };
   }
-  const diff = daysBetween(driver.startDate, asOf);
+  const ref = startOfDayTashkent(asOf);
+
+  // Qo'lda tugatilgan sinov
+  if (driver.trialEndedAt && ref >= startOfDayTashkent(driver.trialEndedAt)) {
+    return { phase: "salary", dailyPlan: cfg.dailyPlan };
+  }
+
+  // Avtomatik (startDate + trialDays)
+  const diff = daysBetween(driver.startDate, ref);
   if (diff < cfg.trialDays) {
     return { phase: "trial", dailyPlan: cfg.dailyPlan, trialDaysLeft: cfg.trialDays - diff };
   }
   return { phase: "salary", dailyPlan: cfg.dailyPlan };
+};
+
+export const endTrial = async (id, endDateInput) => {
+  const driver = await Driver.findById(id);
+  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
+  if (driver.tariff !== TARIFFS.NO_DEPOSIT) {
+    throw new ApiError(400, "Sinov muddati faqat depozitsiz tarifda mavjud");
+  }
+  if (driver.status !== DRIVER_STATUS.ACTIVE) {
+    throw new ApiError(409, "Haydovchi faol emas");
+  }
+
+  const endDate = startOfDayTashkent(endDateInput || new Date());
+  const startDay = startOfDayTashkent(driver.startDate);
+  const autoEnd = startOfDayTashkent(
+    addDays(driver.startDate, TARIFF_CONFIG[TARIFFS.NO_DEPOSIT].trialDays),
+  );
+
+  if (endDate < startDay) {
+    throw new ApiError(400, "Sinov tugash sanasi boshlanish sanasidan oldin bo'la olmaydi");
+  }
+  if (endDate > autoEnd) {
+    throw new ApiError(400, "Sinov tugash sanasi avtomatik tugash sanasidan keyin bo'la olmaydi");
+  }
+
+  driver.trialEndedAt = endDate;
+  await driver.save();
+
+  // Oylikni moslash (dynamic import - circular dependency'dan qochish)
+  const { syncFirstOylikStart } = await import("../../oyliklar/services/oyliklar.service.js");
+  await syncFirstOylikStart(driver, endDate);
+
+  return driver;
 };
 
 const detachCarFromDriver = async (driver) => {
@@ -151,20 +192,34 @@ export const getBalance = async (id) => {
       result.warnings.push({ code: "deposit_low", threshold });
     }
   } else {
-    const cycle = await MonthlyCycle.findOne({ driver: driver._id, status: CYCLE_STATUS.OPEN });
-    if (cycle) {
-      const planDeficit = Math.max(0, cycle.expectedPlanTotal - cycle.paidTotal);
-      const deductions = planDeficit + cycle.finesTotal + cycle.damagesTotal;
-      const payout = Math.max(0, cycle.salary - deductions);
-      const debt = Math.max(0, deductions - cycle.salary);
-      result.cycle = {
-        ...cycle.toJSON(),
+    let oylik = await Oylik.findOne({ driver: driver._id, status: OYLIK_STATUS.ACTIVE });
+
+    // Lazy yaratish: agar salary fazada va oylik yo'q bo'lsa
+    if (!oylik && phase.phase === "salary" && driver.status === DRIVER_STATUS.ACTIVE) {
+      const { ensureCurrentOylik } = await import("../../oyliklar/services/oyliklar.service.js");
+      oylik = await ensureCurrentOylik(driver, new Date());
+    }
+
+    if (oylik) {
+      const planDeficit = Math.max(0, oylik.expectedPlanTotal - oylik.paidTotal);
+      const deductions = planDeficit + oylik.finesTotal + oylik.damagesTotal;
+      const earnedPayout = Math.max(0, oylik.salary + (oylik.carryIn || 0) - deductions);
+      const remainingPayout = Math.max(0, earnedPayout - oylik.paidOut);
+      const debt = Math.max(0, deductions - oylik.salary - Math.max(0, oylik.carryIn || 0));
+      const isLate = Date.now() > new Date(oylik.dueDate).getTime();
+      const lateDays = isLate ? Math.floor((Date.now() - new Date(oylik.dueDate).getTime()) / 86_400_000) : 0;
+      result.oylik = {
+        ...oylik.toJSON(),
         planDeficit,
         deductions,
-        payout,
+        earnedPayout,
+        remainingPayout,
         debt,
+        isLate,
+        lateDays,
       };
       if (debt > 0) result.warnings.push({ code: "debtor", debt });
+      if (isLate) result.warnings.push({ code: "oylik_late", lateDays });
     }
   }
 
@@ -239,24 +294,21 @@ export const recompute = async (id) => {
     await driver.save();
   }
 
-  const cycles = await MonthlyCycle.find({ driver: driver._id, status: CYCLE_STATUS.OPEN });
-  for (const cycle of cycles) {
-    const paidAgg = await DailyPayment.aggregate([
-      { $match: { cycle: cycle._id } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
+  const oyliklar = await Oylik.find({ driver: driver._id, status: OYLIK_STATUS.ACTIVE });
+  for (const oylik of oyliklar) {
     const finesAgg = await Fine.aggregate([
-      { $match: { cycle: cycle._id } },
+      { $match: { oylik: oylik._id } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
     const damagesAgg = await Damage.aggregate([
-      { $match: { cycle: cycle._id } },
+      { $match: { oylik: oylik._id } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
-    cycle.paidTotal = paidAgg[0]?.total || 0;
-    cycle.finesTotal = finesAgg[0]?.total || 0;
-    cycle.damagesTotal = damagesAgg[0]?.total || 0;
-    await cycle.save();
+    oylik.expectedPlanTotal = 0;
+    oylik.paidTotal = 0;
+    oylik.finesTotal = finesAgg[0]?.total || 0;
+    oylik.damagesTotal = damagesAgg[0]?.total || 0;
+    await oylik.save();
   }
   return driver;
 };

@@ -42,3 +42,13 @@ export const updateSchema = z.object({
     notes: z.string().optional(),
   }),
 });
+
+export const endTrialSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    endDate: z
+      .string()
+      .refine((s) => !Number.isNaN(new Date(s).getTime()), "Sana noto'g'ri")
+      .optional(),
+  }),
+});
