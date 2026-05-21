@@ -9,7 +9,7 @@ const dailyPaymentSchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 0 },
     expectedPlan: { type: Number, required: true, min: 0 },
     tariffSnapshot: { type: String, enum: ALL_TARIFFS, required: true },
-    cycle: { type: mongoose.Schema.Types.ObjectId, ref: "MonthlyCycle", default: null, index: true },
+    oylik: { type: mongoose.Schema.Types.ObjectId, ref: "Oylik", default: null, index: true },
     note: { type: String, default: "" },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },

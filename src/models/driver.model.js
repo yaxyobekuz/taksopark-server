@@ -20,6 +20,7 @@ const driverSchema = new mongoose.Schema(
     tariff: { type: String, enum: ALL_TARIFFS, required: true, index: true },
     car: { type: mongoose.Schema.Types.ObjectId, ref: "Car", default: null, index: true },
     startDate: { type: Date, required: true },
+    trialEndedAt: { type: Date, default: null },
 
     depositInitial: { type: Number, default: 0, min: 0 },
     depositRemaining: { type: Number, default: 0, index: true },

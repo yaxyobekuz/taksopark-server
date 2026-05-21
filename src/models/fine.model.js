@@ -16,7 +16,7 @@ const fineSchema = new mongoose.Schema(
     car: { type: mongoose.Schema.Types.ObjectId, ref: "Car", required: true, index: true },
     amount: { type: Number, required: true, min: 1 },
     issueDate: { type: Date, required: true, default: Date.now },
-    cycle: { type: mongoose.Schema.Types.ObjectId, ref: "MonthlyCycle", default: null, index: true },
+    oylik: { type: mongoose.Schema.Types.ObjectId, ref: "Oylik", default: null, index: true },
     attachments: {
       type: [attachmentSchema],
       validate: [(v) => Array.isArray(v) && v.length > 0, "Kamida 1 ta fayl majburiy"],

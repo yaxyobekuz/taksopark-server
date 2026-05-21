@@ -12,6 +12,7 @@ export const TRANSACTION_SOURCES = Object.freeze({
   DAMAGE_PAYMENT_DEPOSIT: "damage_payment_deposit",
   FINE_SYSTEM: "fine_system",
   DAMAGE_SYSTEM: "damage_system",
+  OYLIK_PAYOUT: "oylik_payout",
   MANUAL: "manual",
 });
 
@@ -27,6 +28,8 @@ const transactionSchema = new mongoose.Schema(
     damage: { type: mongoose.Schema.Types.ObjectId, ref: "Damage", default: null },
     finePayment: { type: mongoose.Schema.Types.ObjectId, ref: "FinePayment", default: null },
     damagePayment: { type: mongoose.Schema.Types.ObjectId, ref: "DamagePayment", default: null },
+    oylik: { type: mongoose.Schema.Types.ObjectId, ref: "Oylik", default: null, index: true },
+    payoutId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     note: { type: String, default: "" },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
