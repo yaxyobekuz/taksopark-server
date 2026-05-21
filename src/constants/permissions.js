@@ -30,7 +30,6 @@ export const PERMISSIONS = Object.freeze({
   DAMAGES_DELETE: "damages.delete",
 
   OYLIKLAR_READ: "oyliklar.read",
-  OYLIKLAR_CLOSE: "oyliklar.close",
   OYLIKLAR_PAYOUT: "oyliklar.payout",
 
   FINES_PAY: "fines.pay",
@@ -74,7 +73,6 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.DAMAGES_DELETE]: { label: "Zararni o'chirish", group: "damages" },
 
   [PERMISSIONS.OYLIKLAR_READ]: { label: "Oyliklarni ko'rish", group: "oyliklar" },
-  [PERMISSIONS.OYLIKLAR_CLOSE]: { label: "Oylikni yopish", group: "oyliklar" },
   [PERMISSIONS.OYLIKLAR_PAYOUT]: { label: "Oylik haqini berish", group: "oyliklar" },
 
   [PERMISSIONS.FINES_PAY]: { label: "Jarimani to'lash", group: "fines" },
