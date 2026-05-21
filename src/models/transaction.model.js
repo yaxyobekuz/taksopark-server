@@ -6,6 +6,7 @@ export const TRANSACTION_TYPES = Object.freeze({
 });
 
 export const TRANSACTION_SOURCES = Object.freeze({
+  DAILY_PAYMENT: "daily_payment",
   FINE_PAYMENT_CASH: "fine_payment_cash",
   FINE_PAYMENT_DEPOSIT: "fine_payment_deposit",
   DAMAGE_PAYMENT_CASH: "damage_payment_cash",
@@ -24,6 +25,7 @@ const transactionSchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 1 },
     date: { type: Date, required: true, default: Date.now, index: true },
     driver: { type: mongoose.Schema.Types.ObjectId, ref: "Driver", default: null, index: true },
+    dailyPayment: { type: mongoose.Schema.Types.ObjectId, ref: "DailyPayment", default: null },
     fine: { type: mongoose.Schema.Types.ObjectId, ref: "Fine", default: null },
     damage: { type: mongoose.Schema.Types.ObjectId, ref: "Damage", default: null },
     finePayment: { type: mongoose.Schema.Types.ObjectId, ref: "FinePayment", default: null },

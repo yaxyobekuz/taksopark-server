@@ -1,10 +1,5 @@
 import mongoose from "mongoose";
 
-export const OYLIK_STATUS = Object.freeze({
-  ACTIVE: "active",
-  CLOSED: "closed",
-});
-
 const payoutSchema = new mongoose.Schema(
   {
     amount: { type: Number, required: true, min: 1 },
@@ -32,32 +27,13 @@ const oylikSchema = new mongoose.Schema(
     finesTotal: { type: Number, default: 0, min: 0 },
     damagesTotal: { type: Number, default: 0, min: 0 },
 
-    carryIn: { type: Number, default: 0 },
-    carryOut: { type: Number, default: 0 },
-
     payouts: { type: [payoutSchema], default: [] },
     paidOut: { type: Number, default: 0, min: 0 },
-
-    status: {
-      type: String,
-      enum: Object.values(OYLIK_STATUS),
-      default: OYLIK_STATUS.ACTIVE,
-      index: true,
-    },
-
-    closedAt: { type: Date, default: null },
-    closedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-    closedPlanDeficit: { type: Number, default: 0 },
-    closedDeductions: { type: Number, default: 0 },
-    closedEarnedPayout: { type: Number, default: 0 },
-    closedLateDays: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
 
 oylikSchema.index({ driver: 1, oylikNumber: 1 }, { unique: true });
-oylikSchema.index({ driver: 1, status: 1 });
-oylikSchema.index({ status: 1, dueDate: 1 });
 
 oylikSchema.virtual("planDeficit").get(function () {
   return Math.max(0, this.expectedPlanTotal - this.paidTotal);
@@ -66,13 +42,12 @@ oylikSchema.virtual("deductions").get(function () {
   return this.planDeficit + this.finesTotal + this.damagesTotal;
 });
 oylikSchema.virtual("earnedPayout").get(function () {
-  return Math.max(0, this.salary + this.carryIn - this.deductions);
+  return Math.max(0, this.salary - this.deductions);
 });
 oylikSchema.virtual("remainingPayout").get(function () {
   return Math.max(0, this.earnedPayout - this.paidOut);
 });
 oylikSchema.virtual("isLate").get(function () {
-  if (this.status !== OYLIK_STATUS.ACTIVE) return false;
   return Date.now() > this.dueDate.getTime();
 });
 oylikSchema.virtual("lateDays").get(function () {
