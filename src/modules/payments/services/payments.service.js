@@ -1,6 +1,7 @@
 import DailyPayment from "../../../models/dailyPayment.model.js";
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
 import Oylik from "../../../models/oylik.model.js";
+import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS } from "../../../constants/tariffs.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
@@ -18,6 +19,30 @@ const applyOylikDelta = async (oylikId, paidDelta) => {
 };
 
 const depositDeficit = (expected, paid) => Math.max(0, expected - paid);
+
+// Kunlik to'lov o'zgarganda mos Transaction yozuvini moslaydi.
+const syncPaymentTransaction = async (payment, currentUser) => {
+  if (payment.amount > 0) {
+    const updated = await Transaction.updateOne(
+      { dailyPayment: payment._id },
+      { $set: { amount: payment.amount, date: payment.date, note: payment.note || "" } },
+    );
+    if (updated.matchedCount === 0) {
+      await Transaction.create({
+        type: TRANSACTION_TYPES.INCOME,
+        source: TRANSACTION_SOURCES.DAILY_PAYMENT,
+        amount: payment.amount,
+        date: payment.date,
+        driver: payment.driver,
+        dailyPayment: payment._id,
+        note: payment.note || "",
+        createdBy: currentUser._id,
+      });
+    }
+  } else {
+    await Transaction.deleteMany({ dailyPayment: payment._id });
+  }
+};
 
 export const list = async ({ driverId, carId, fromDate, toDate, page = 1, limit = 20 }) => {
   const filter = {};
@@ -118,10 +143,24 @@ export const create = async (body, currentUser) => {
 
   const deficit = depositDeficit(phase.dailyPlan, body.amount);
   if (deficit > 0) await applyDepositDelta(driver, -deficit);
+
+  if (body.amount > 0) {
+    await Transaction.create({
+      type: TRANSACTION_TYPES.INCOME,
+      source: TRANSACTION_SOURCES.DAILY_PAYMENT,
+      amount: body.amount,
+      date,
+      driver: driver._id,
+      dailyPayment: payment._id,
+      note: body.note || "",
+      createdBy: currentUser._id,
+    });
+  }
+
   return payment;
 };
 
-export const update = async (id, body) => {
+export const update = async (id, body, currentUser) => {
   const payment = await DailyPayment.findById(id);
   if (!payment) throw new ApiError(404, "To'lov topilmadi");
 
@@ -139,6 +178,7 @@ export const update = async (id, body) => {
   }
   if (body.note !== undefined) payment.note = body.note;
   await payment.save();
+  await syncPaymentTransaction(payment, currentUser);
   return payment;
 };
 
@@ -151,5 +191,6 @@ export const remove = async (id) => {
     if (oldDeficit > 0) await applyDepositDelta(driver, oldDeficit);
   }
   if (payment.oylik) await applyOylikDelta(payment.oylik, -payment.amount);
+  await Transaction.deleteMany({ dailyPayment: payment._id });
   await payment.deleteOne();
 };
