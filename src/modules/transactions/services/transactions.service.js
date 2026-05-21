@@ -69,9 +69,9 @@ export const create = async (body, currentUser) => {
 
 export const remove = async (id) => {
   const tx = await Transaction.findById(id);
-  if (!tx) throw new ApiError(404, "Yozuv topilmadi");
+  if (!tx) throw new ApiError(404, "Tranzaksiya topilmadi");
   if (tx.source !== TRANSACTION_SOURCES.MANUAL) {
-    throw new ApiError(409, "Avtomat yozuvlarni o'chirib bo'lmaydi. To'lovni bekor qiling");
+    throw new ApiError(409, "Avtomat tranzaksiyalarni o'chirib bo'lmaydi. To'lovni bekor qiling");
   }
   await tx.deleteOne();
 };
