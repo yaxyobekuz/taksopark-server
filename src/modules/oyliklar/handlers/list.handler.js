@@ -6,7 +6,6 @@ const list = asyncHandler(async (req, res) => {
   const { page, limit } = parsePagination(req.query);
   const { items, total } = await oyliklarService.list({
     driverId: req.query.driverId,
-    status: req.query.status,
     late: req.query.late,
     page,
     limit,

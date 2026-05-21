@@ -8,14 +8,15 @@ import {
   idSchema,
   driverIdParamSchema,
   createPayoutSchema,
+  updatePayoutSchema,
   payoutIdSchema,
 } from "./validators/oyliklar.validator.js";
 import list from "./handlers/list.handler.js";
 import getById from "./handlers/getById.handler.js";
 import current from "./handlers/current.handler.js";
 import statement from "./handlers/statement.handler.js";
-import close from "./handlers/close.handler.js";
 import createPayout from "./handlers/createPayout.handler.js";
+import updatePayout from "./handlers/updatePayout.handler.js";
 import deletePayout from "./handlers/deletePayout.handler.js";
 
 const router = Router();
@@ -55,19 +56,19 @@ router.post(
   validate(createPayoutSchema),
   createPayout,
 );
+router.patch(
+  "/:id/payouts/:payoutId",
+  requireAuth,
+  requirePermission(PERMISSIONS.OYLIKLAR_PAYOUT),
+  validate(updatePayoutSchema),
+  updatePayout,
+);
 router.delete(
   "/:id/payouts/:payoutId",
   requireAuth,
   requirePermission(PERMISSIONS.OYLIKLAR_PAYOUT),
   validate(payoutIdSchema),
   deletePayout,
-);
-router.post(
-  "/:id/close",
-  requireAuth,
-  requirePermission(PERMISSIONS.OYLIKLAR_CLOSE),
-  validate(idSchema),
-  close,
 );
 
 export default router;
