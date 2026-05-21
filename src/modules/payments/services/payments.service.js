@@ -1,11 +1,10 @@
 import DailyPayment from "../../../models/dailyPayment.model.js";
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
-import MonthlyCycle from "../../../models/monthlyCycle.model.js";
+import Oylik from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
-import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
+import { TARIFFS } from "../../../constants/tariffs.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
-import { ensureCurrentCycle } from "../../cycles/services/cycles.service.js";
 
 const applyDepositDelta = async (driver, delta) => {
   if (driver.tariff !== TARIFFS.DEPOSIT) return;
@@ -13,9 +12,9 @@ const applyDepositDelta = async (driver, delta) => {
   await driver.save();
 };
 
-const applyCycleDelta = async (cycleId, paidDelta) => {
-  if (!cycleId) return;
-  await MonthlyCycle.updateOne({ _id: cycleId }, { $inc: { paidTotal: paidDelta } });
+const applyOylikDelta = async (oylikId, paidDelta) => {
+  if (!oylikId) return;
+  await Oylik.updateOne({ _id: oylikId }, { $inc: { paidTotal: paidDelta } });
 };
 
 const depositDeficit = (expected, paid) => Math.max(0, expected - paid);
@@ -60,13 +59,17 @@ export const todayTotal = async ({ date }) => {
 
   const perCar = drivers
     .filter((d) => d.car)
-    .map((d) => ({
-      carId: String(d.car._id),
-      plateNumber: d.car.plateNumber,
-      model: d.car.model,
-      expected: TARIFF_CONFIG[d.tariff]?.dailyPlan || 0,
-      amount: paidByCar.get(String(d.car._id)) || 0,
-    }))
+    .map((d) => {
+      const phase = getActiveTariffPhase(d, target);
+      const expected = phase.phase === "salary" ? 0 : phase.dailyPlan;
+      return {
+        carId: String(d.car._id),
+        plateNumber: d.car.plateNumber,
+        model: d.car.model,
+        expected,
+        amount: paidByCar.get(String(d.car._id)) || 0,
+      };
+    })
     .sort((a, b) => (a.plateNumber || "").localeCompare(b.plateNumber || ""));
 
   const totalExpected = perCar.reduce((s, r) => s + r.expected, 0);
@@ -85,10 +88,13 @@ export const create = async (body, currentUser) => {
 
   const date = startOfDayTashkent(body.date);
   const phase = getActiveTariffPhase(driver, date);
-  const cycle =
-    driver.tariff === TARIFFS.NO_DEPOSIT && phase.phase === "salary"
-      ? await ensureCurrentCycle(driver, date)
-      : null;
+
+  if (driver.tariff === TARIFFS.NO_DEPOSIT && phase.phase === "salary") {
+    throw new ApiError(
+      409,
+      "Oylik fazasidagi haydovchi kunlik to'lov qilmaydi. Kompaniya unga oylik beradi.",
+    );
+  }
 
   let payment;
   try {
@@ -99,7 +105,7 @@ export const create = async (body, currentUser) => {
       amount: body.amount,
       expectedPlan: phase.dailyPlan,
       tariffSnapshot: driver.tariff,
-      cycle: cycle ? cycle._id : null,
+      oylik: null,
       note: body.note || "",
       createdBy: currentUser._id,
     });
@@ -112,7 +118,6 @@ export const create = async (body, currentUser) => {
 
   const deficit = depositDeficit(phase.dailyPlan, body.amount);
   if (deficit > 0) await applyDepositDelta(driver, -deficit);
-  await applyCycleDelta(cycle?._id, body.amount);
   return payment;
 };
 
@@ -129,7 +134,7 @@ export const update = async (id, body) => {
     const deltaDeposit = oldDeficit - newDeficit;
     if (deltaDeposit !== 0) await applyDepositDelta(driver, deltaDeposit);
     const deltaPaid = body.amount - payment.amount;
-    if (deltaPaid !== 0) await applyCycleDelta(payment.cycle, deltaPaid);
+    if (deltaPaid !== 0) await applyOylikDelta(payment.oylik, deltaPaid);
     payment.amount = body.amount;
   }
   if (body.note !== undefined) payment.note = body.note;
@@ -145,6 +150,6 @@ export const remove = async (id) => {
     const oldDeficit = depositDeficit(payment.expectedPlan, payment.amount);
     if (oldDeficit > 0) await applyDepositDelta(driver, oldDeficit);
   }
-  if (payment.cycle) await applyCycleDelta(payment.cycle, -payment.amount);
+  if (payment.oylik) await applyOylikDelta(payment.oylik, -payment.amount);
   await payment.deleteOne();
 };
