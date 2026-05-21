@@ -2,12 +2,11 @@ import Damage from "../../../models/damage.model.js";
 import DamagePayment from "../../../models/damagePayment.model.js";
 import Transaction from "../../../models/transaction.model.js";
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
-import MonthlyCycle from "../../../models/monthlyCycle.model.js";
+import Oylik, { OYLIK_STATUS } from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS } from "../../../constants/tariffs.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
-import { ensureCurrentCycle } from "../../cycles/services/cycles.service.js";
 
 export const list = async ({ driverId, carId, fromDate, toDate, paymentStatus, page = 1, limit = 20 }) => {
   const filter = {};
@@ -53,17 +52,20 @@ export const create = async (body, attachments, currentUser) => {
 
   const incidentDate = startOfDayTashkent(body.incidentDate);
   const phase = getActiveTariffPhase(driver, incidentDate);
-  const cycle =
-    driver.tariff === TARIFFS.NO_DEPOSIT && phase.phase === "salary"
-      ? await ensureCurrentCycle(driver, incidentDate)
-      : null;
+
+  // Sinov paytida oylikga bog'lanmaydi. Salary fazada faqat MAVJUD active oylikga link.
+  let oylikId = null;
+  if (driver.tariff === TARIFFS.NO_DEPOSIT && phase.phase === "salary") {
+    const active = await Oylik.findOne({ driver: driver._id, status: OYLIK_STATUS.ACTIVE });
+    if (active) oylikId = active._id;
+  }
 
   const damage = await Damage.create({
     driver: driver._id,
     car: driver.car,
     amount: body.amount,
     incidentDate,
-    cycle: cycle ? cycle._id : null,
+    oylik: oylikId,
     attachments,
     paidAmount: 0,
     paymentStatus: "pending",
