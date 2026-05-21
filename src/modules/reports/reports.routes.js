@@ -10,6 +10,7 @@ import {
 import dailyPlanTotal from "./handlers/dailyPlanTotal.handler.js";
 import finance from "./handlers/finance.handler.js";
 import minYear from "./handlers/minYear.handler.js";
+import monthlyIncomeExpense from "./handlers/monthlyIncomeExpense.handler.js";
 
 const router = Router();
 
@@ -32,6 +33,12 @@ router.get(
   requireAuth,
   requirePermission(PERMISSIONS.REPORTS_READ),
   minYear,
+);
+router.get(
+  "/monthly-income-expense",
+  requireAuth,
+  requirePermission(PERMISSIONS.REPORTS_READ),
+  monthlyIncomeExpense,
 );
 
 export default router;
