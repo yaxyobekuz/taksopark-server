@@ -2,11 +2,11 @@ import Fine from "../../../models/fine.model.js";
 import FinePayment from "../../../models/finePayment.model.js";
 import Transaction from "../../../models/transaction.model.js";
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
-import Oylik, { OYLIK_STATUS } from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS } from "../../../constants/tariffs.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
+import { oylikForDate } from "../../oyliklar/services/oyliklar.service.js";
 
 export const list = async ({ driverId, carId, fromDate, toDate, paymentStatus, page = 1, limit = 20 }) => {
   const filter = {};
@@ -53,11 +53,11 @@ export const create = async (body, attachments, currentUser) => {
   const issueDate = startOfDayTashkent(body.issueDate);
   const phase = getActiveTariffPhase(driver, issueDate);
 
-  // Sinov paytida oylikga bog'lanmaydi. Salary fazada faqat MAVJUD active oylikga link.
+  // Sinov paytida oylikga bog'lanmaydi. Salary fazada jarima sanasidagi oylikga link.
   let oylikId = null;
   if (driver.tariff === TARIFFS.NO_DEPOSIT && phase.phase === "salary") {
-    const active = await Oylik.findOne({ driver: driver._id, status: OYLIK_STATUS.ACTIVE });
-    if (active) oylikId = active._id;
+    const oylik = await oylikForDate(driver._id, issueDate);
+    if (oylik) oylikId = oylik._id;
   }
 
   const fine = await Fine.create({
