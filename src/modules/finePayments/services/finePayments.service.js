@@ -2,7 +2,7 @@ import Fine from "../../../models/fine.model.js";
 import FinePayment, { PAYMENT_SOURCES } from "../../../models/finePayment.model.js";
 import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
 import Driver from "../../../models/driver.model.js";
-import MonthlyCycle from "../../../models/monthlyCycle.model.js";
+import Oylik from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS } from "../../../constants/tariffs.js";
 
@@ -75,8 +75,8 @@ export const create = async (body, currentUser) => {
     createdBy: currentUser._id,
   });
 
-  if (body.source === PAYMENT_SOURCES.SYSTEM && fine.cycle) {
-    await MonthlyCycle.updateOne({ _id: fine.cycle }, { $inc: { finesTotal: body.amount } });
+  if (body.source === PAYMENT_SOURCES.SYSTEM && fine.oylik) {
+    await Oylik.updateOne({ _id: fine.oylik }, { $inc: { finesTotal: body.amount } });
   }
 
   fine.paidAmount += body.amount;
@@ -100,8 +100,8 @@ export const remove = async (id) => {
     }
   }
 
-  if (payment.source === PAYMENT_SOURCES.SYSTEM && fine.cycle) {
-    await MonthlyCycle.updateOne({ _id: fine.cycle }, { $inc: { finesTotal: -payment.amount } });
+  if (payment.source === PAYMENT_SOURCES.SYSTEM && fine.oylik) {
+    await Oylik.updateOne({ _id: fine.oylik }, { $inc: { finesTotal: -payment.amount } });
   }
 
   await Transaction.deleteMany({ finePayment: payment._id });
