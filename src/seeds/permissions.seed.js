@@ -9,6 +9,9 @@ import logger from "../config/logger.js";
 const seed = async () => {
   await connectDB();
 
+  // Eski permission key'larni tozalash (cycles → oyliklar migratsiya)
+  await Permission.deleteMany({ key: { $in: ["cycles.read", "cycles.settle"] } });
+
   const permIds = {};
   for (const key of Object.values(PERMISSIONS)) {
     const meta = PERMISSION_LABELS[key] || { label: key, group: "general" };

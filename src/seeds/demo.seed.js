@@ -8,7 +8,7 @@ import Fine from "../models/fine.model.js";
 import Damage from "../models/damage.model.js";
 import FinePayment, { PAYMENT_SOURCES } from "../models/finePayment.model.js";
 import DamagePayment from "../models/damagePayment.model.js";
-import MonthlyCycle from "../models/monthlyCycle.model.js";
+import Oylik from "../models/oylik.model.js";
 import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../models/transaction.model.js";
 import { TARIFFS, TARIFF_CONFIG } from "../constants/tariffs.js";
 import { startOfDayTashkent, addDays } from "../utils/timezone.js";
@@ -26,7 +26,7 @@ const seed = async () => {
     Damage.deleteMany({}),
     FinePayment.deleteMany({}),
     DamagePayment.deleteMany({}),
-    MonthlyCycle.deleteMany({}),
+    Oylik.deleteMany({}),
     Transaction.deleteMany({}),
   ]);
   logger.info("Eski demo data tozalandi");
@@ -151,7 +151,7 @@ const seed = async () => {
     ...p,
     expectedPlan: p.driver.equals(drivers[2]._id) ? 560_000 : 500_000,
     tariffSnapshot: p.driver.equals(drivers[2]._id) ? TARIFFS.NO_DEPOSIT : TARIFFS.DEPOSIT,
-    cycle: null,
+    oylik: null,
     note: "",
     createdBy: owner._id,
   }));
@@ -172,7 +172,7 @@ const seed = async () => {
     car: drivers[0].car,
     amount: 800_000,
     issueDate: daysAgo(5),
-    cycle: null,
+    oylik: null,
     attachments: [fakeAttachment],
     paidAmount: 0,
     paymentStatus: "pending",
@@ -185,7 +185,7 @@ const seed = async () => {
     car: drivers[2].car,
     amount: 500_000,
     issueDate: daysAgo(3),
-    cycle: null,
+    oylik: null,
     attachments: [fakeAttachment],
     paidAmount: 500_000,
     paymentStatus: "paid",
@@ -221,7 +221,7 @@ const seed = async () => {
     car: drivers[2].car,
     amount: 1_200_000,
     incidentDate: daysAgo(7),
-    cycle: null,
+    oylik: null,
     attachments: [fakeAttachment],
     paidAmount: 500_000,
     paymentStatus: "partial",
