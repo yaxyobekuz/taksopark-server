@@ -7,6 +7,7 @@ export const PERMISSIONS = Object.freeze({
   DRIVERS_CREATE: "drivers.create",
   DRIVERS_UPDATE: "drivers.update",
   DRIVERS_DELETE: "drivers.delete",
+  DRIVERS_END_TRIAL: "drivers.end_trial",
 
   CARS_READ: "cars.read",
   CARS_CREATE: "cars.create",
@@ -28,8 +29,9 @@ export const PERMISSIONS = Object.freeze({
   DAMAGES_UPDATE: "damages.update",
   DAMAGES_DELETE: "damages.delete",
 
-  CYCLES_READ: "cycles.read",
-  CYCLES_SETTLE: "cycles.settle",
+  OYLIKLAR_READ: "oyliklar.read",
+  OYLIKLAR_CLOSE: "oyliklar.close",
+  OYLIKLAR_PAYOUT: "oyliklar.payout",
 
   FINES_PAY: "fines.pay",
   DAMAGES_PAY: "damages.pay",
@@ -49,6 +51,7 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.DRIVERS_CREATE]: { label: "Haydovchi qo'shish", group: "drivers" },
   [PERMISSIONS.DRIVERS_UPDATE]: { label: "Haydovchini tahrirlash", group: "drivers" },
   [PERMISSIONS.DRIVERS_DELETE]: { label: "Haydovchini o'chirish", group: "drivers" },
+  [PERMISSIONS.DRIVERS_END_TRIAL]: { label: "Sinov muddatini tugatish", group: "drivers" },
 
   [PERMISSIONS.CARS_READ]: { label: "Mashinalarni ko'rish", group: "cars" },
   [PERMISSIONS.CARS_CREATE]: { label: "Mashina qo'shish", group: "cars" },
@@ -70,8 +73,9 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.DAMAGES_UPDATE]: { label: "Zararni tahrirlash", group: "damages" },
   [PERMISSIONS.DAMAGES_DELETE]: { label: "Zararni o'chirish", group: "damages" },
 
-  [PERMISSIONS.CYCLES_READ]: { label: "Oylik tsikllarni ko'rish", group: "cycles" },
-  [PERMISSIONS.CYCLES_SETTLE]: { label: "Oylik tsiklni yakunlash", group: "cycles" },
+  [PERMISSIONS.OYLIKLAR_READ]: { label: "Oyliklarni ko'rish", group: "oyliklar" },
+  [PERMISSIONS.OYLIKLAR_CLOSE]: { label: "Oylikni yopish", group: "oyliklar" },
+  [PERMISSIONS.OYLIKLAR_PAYOUT]: { label: "Oylik haqini berish", group: "oyliklar" },
 
   [PERMISSIONS.FINES_PAY]: { label: "Jarimani to'lash", group: "fines" },
   [PERMISSIONS.DAMAGES_PAY]: { label: "Zararni to'lash", group: "damages" },
