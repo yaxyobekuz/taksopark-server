@@ -1,9 +1,7 @@
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
 import DailyPayment from "../../../models/dailyPayment.model.js";
-import Fine from "../../../models/fine.model.js";
-import Damage from "../../../models/damage.model.js";
-import Oylik, { OYLIK_STATUS } from "../../../models/oylik.model.js";
+import Oylik from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
 import { startOfDayTashkent, daysBetween, addDays } from "../../../utils/timezone.js";
@@ -192,20 +190,19 @@ export const getBalance = async (id) => {
       result.warnings.push({ code: "deposit_low", threshold });
     }
   } else {
-    let oylik = await Oylik.findOne({ driver: driver._id, status: OYLIK_STATUS.ACTIVE });
-
-    // Lazy yaratish: agar salary fazada va oylik yo'q bo'lsa
-    if (!oylik && phase.phase === "salary" && driver.status === DRIVER_STATUS.ACTIVE) {
-      const { ensureCurrentOylik } = await import("../../oyliklar/services/oyliklar.service.js");
-      oylik = await ensureCurrentOylik(driver, new Date());
+    // Lazy yaratish: salary fazada yetishmagan oyliklarni yaratamiz
+    if (phase.phase === "salary" && driver.status === DRIVER_STATUS.ACTIVE) {
+      const { ensureOyliklar } = await import("../../oyliklar/services/oyliklar.service.js");
+      await ensureOyliklar(driver, new Date());
     }
+    const oylik = await Oylik.findOne({ driver: driver._id }).sort({ oylikNumber: -1 });
 
     if (oylik) {
       const planDeficit = Math.max(0, oylik.expectedPlanTotal - oylik.paidTotal);
       const deductions = planDeficit + oylik.finesTotal + oylik.damagesTotal;
-      const earnedPayout = Math.max(0, oylik.salary + (oylik.carryIn || 0) - deductions);
+      const earnedPayout = Math.max(0, oylik.salary - deductions);
       const remainingPayout = Math.max(0, earnedPayout - oylik.paidOut);
-      const debt = Math.max(0, deductions - oylik.salary - Math.max(0, oylik.carryIn || 0));
+      const debt = Math.max(0, deductions - oylik.salary);
       const isLate = Date.now() > new Date(oylik.dueDate).getTime();
       const lateDays = isLate ? Math.floor((Date.now() - new Date(oylik.dueDate).getTime()) / 86_400_000) : 0;
       result.oylik = {
@@ -268,47 +265,4 @@ export const warnings = async () => {
   }
 
   return { depositLow, depositEmpty, noPayment2Days };
-};
-
-export const recompute = async (id) => {
-  const driver = await Driver.findById(id);
-  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-
-  if (driver.tariff === TARIFFS.DEPOSIT) {
-    const payments = await DailyPayment.find({ driver: driver._id });
-    let deficitSum = 0;
-    for (const p of payments) {
-      deficitSum += Math.max(0, p.expectedPlan - p.amount);
-    }
-    const finesAgg = await Fine.aggregate([
-      { $match: { driver: driver._id } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
-    const damagesAgg = await Damage.aggregate([
-      { $match: { driver: driver._id } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
-    const fines = finesAgg[0]?.total || 0;
-    const damages = damagesAgg[0]?.total || 0;
-    driver.depositRemaining = Math.max(0, driver.depositInitial - deficitSum - fines - damages);
-    await driver.save();
-  }
-
-  const oyliklar = await Oylik.find({ driver: driver._id, status: OYLIK_STATUS.ACTIVE });
-  for (const oylik of oyliklar) {
-    const finesAgg = await Fine.aggregate([
-      { $match: { oylik: oylik._id } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
-    const damagesAgg = await Damage.aggregate([
-      { $match: { oylik: oylik._id } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
-    oylik.expectedPlanTotal = 0;
-    oylik.paidTotal = 0;
-    oylik.finesTotal = finesAgg[0]?.total || 0;
-    oylik.damagesTotal = damagesAgg[0]?.total || 0;
-    await oylik.save();
-  }
-  return driver;
 };

@@ -17,7 +17,6 @@ import warnings from "./handlers/warnings.handler.js";
 import create from "./handlers/create.handler.js";
 import update from "./handlers/update.handler.js";
 import remove from "./handlers/remove.handler.js";
-import recompute from "./handlers/recompute.handler.js";
 import endTrial from "./handlers/endTrial.handler.js";
 
 const router = Router();
@@ -28,7 +27,6 @@ router.get("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), val
 router.get("/:id/balance", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), validate(idSchema), getBalance);
 router.post("/", requireAuth, requirePermission(PERMISSIONS.DRIVERS_CREATE), validate(createSchema), create);
 router.patch("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_UPDATE), validate(updateSchema), update);
-router.post("/:id/recompute", requireAuth, requirePermission(PERMISSIONS.DRIVERS_UPDATE), validate(idSchema), recompute);
 router.post("/:id/end-trial", requireAuth, requirePermission(PERMISSIONS.DRIVERS_END_TRIAL), validate(endTrialSchema), endTrial);
 router.delete("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_DELETE), validate(idSchema), remove);
 
