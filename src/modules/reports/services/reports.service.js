@@ -112,6 +112,11 @@ export const finance = async ({ fromDate, toDate, carId }) => {
     byCar.set(k, cur);
   });
 
+  // Bitta mashina so'ralganda, harakati bo'lmasa ham row qaytsin
+  if (carId && !byCar.has(String(carId))) {
+    upsert(String(carId), {});
+  }
+
   const carIds = Array.from(byCar.keys());
   const cars = await Car.find({ _id: { $in: carIds } }).lean();
   const drivers = await Driver.find({ car: { $in: carIds }, status: "active" }).lean();
