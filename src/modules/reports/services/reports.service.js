@@ -2,11 +2,11 @@ import mongoose from "mongoose";
 import DailyPayment from "../../../models/dailyPayment.model.js";
 import Fine from "../../../models/fine.model.js";
 import Damage from "../../../models/damage.model.js";
-import MonthlyCycle, { CYCLE_STATUS } from "../../../models/monthlyCycle.model.js";
+import Oylik from "../../../models/oylik.model.js";
 import Driver from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
-import { TARIFF_CONFIG } from "../../../constants/tariffs.js";
-import { startOfDayTashkent, endOfDayTashkent, daysBetween } from "../../../utils/timezone.js";
+import { startOfDayTashkent, endOfDayTashkent } from "../../../utils/timezone.js";
+import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
 
 export const dailyPlanTotal = async ({ date }) => {
   const target = startOfDayTashkent(date || new Date());
@@ -26,14 +26,18 @@ export const dailyPlanTotal = async ({ date }) => {
 
   const perCar = drivers
     .filter((d) => d.car)
-    .map((d) => ({
-      carId: String(d.car._id),
-      plateNumber: d.car.plateNumber,
-      model: d.car.model,
-      driverName: `${d.firstName} ${d.lastName}`.trim(),
-      expected: TARIFF_CONFIG[d.tariff]?.dailyPlan || 0,
-      amount: paidByCar.get(String(d.car._id)) || 0,
-    }))
+    .map((d) => {
+      const phase = getActiveTariffPhase(d, target);
+      const expected = phase.phase === "salary" ? 0 : phase.dailyPlan;
+      return {
+        carId: String(d.car._id),
+        plateNumber: d.car.plateNumber,
+        model: d.car.model,
+        driverName: `${d.firstName} ${d.lastName}`.trim(),
+        expected,
+        amount: paidByCar.get(String(d.car._id)) || 0,
+      };
+    })
     .sort((a, b) => (a.plateNumber || "").localeCompare(b.plateNumber || ""));
 
   const totalExpected = perCar.reduce((s, r) => s + r.expected, 0);
@@ -61,7 +65,7 @@ export const finance = async ({ fromDate, toDate, carId }) => {
   const to = endOfDayTashkent(toDate);
   const carFilter = carId ? { car: oid(carId) } : {};
 
-  const [revenue, fines, damages, cyclesAll] = await Promise.all([
+  const [revenue, fines, damages, salaryRows] = await Promise.all([
     DailyPayment.aggregate([
       { $match: { date: { $gte: from, $lte: to }, ...carFilter } },
       { $group: { _id: "$car", amount: { $sum: "$amount" } } },
@@ -74,12 +78,12 @@ export const finance = async ({ fromDate, toDate, carId }) => {
       { $match: { incidentDate: { $gte: from, $lte: to }, ...carFilter } },
       { $group: { _id: "$car", amount: { $sum: "$paidAmount" } } },
     ]),
-    MonthlyCycle.find({
-      status: CYCLE_STATUS.SETTLED,
-      startDate: { $lte: to },
-      endDate: { $gte: from },
-      ...(carId ? { car: oid(carId) } : {}),
-    }).lean(),
+    Oylik.aggregate([
+      { $match: { ...(carId ? { car: oid(carId) } : {}) } },
+      { $unwind: "$payouts" },
+      { $match: { "payouts.paidAt": { $gte: from, $lte: to } } },
+      { $group: { _id: "$car", amount: { $sum: "$payouts.amount" } } },
+    ]),
   ]);
 
   const byCar = new Map();
@@ -101,20 +105,12 @@ export const finance = async ({ fromDate, toDate, carId }) => {
     byCar.set(String(r._id), cur);
   });
 
-  for (const c of cyclesAll) {
-    const cycleStart = new Date(c.startDate);
-    const cycleEnd = new Date(c.endDate);
-    const cycleDays = daysBetween(cycleStart, cycleEnd) + 1;
-    const overlapStart = cycleStart > from ? cycleStart : from;
-    const overlapEnd = cycleEnd < to ? cycleEnd : to;
-    const overlapDays = Math.max(0, daysBetween(overlapStart, overlapEnd) + 1);
-    if (overlapDays === 0) continue;
-    const proratedSalary = Math.round((c.finalPayout * overlapDays) / cycleDays);
-    const k = String(c.car);
+  salaryRows.forEach((r) => {
+    const k = String(r._id);
     const cur = byCar.get(k) || { carId: k, revenue: 0, fines: 0, damages: 0, salary: 0 };
-    cur.salary = (cur.salary || 0) + proratedSalary;
+    cur.salary = (cur.salary || 0) + r.amount;
     byCar.set(k, cur);
-  }
+  });
 
   const carIds = Array.from(byCar.keys());
   const cars = await Car.find({ _id: { $in: carIds } }).lean();
@@ -141,7 +137,7 @@ export const finance = async ({ fromDate, toDate, carId }) => {
         profit,
       };
     })
-    .sort((a, b) => a.plateNumber.localeCompare(b.plateNumber));
+    .sort((a, b) => (a.plateNumber || "").localeCompare(b.plateNumber || ""));
 
   const totals = rows.reduce(
     (acc, r) => {
