@@ -6,7 +6,7 @@ import Oylik from "../../../models/oylik.model.js";
 import Driver from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
 import Transaction, { TRANSACTION_TYPES } from "../../../models/transaction.model.js";
-import { startOfDayTashkent, endOfDayTashkent, addMonths } from "../../../utils/timezone.js";
+import { startOfDayTashkent, endOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
 
 export const dailyPlanTotal = async ({ date }) => {
@@ -165,15 +165,26 @@ const UZ_MONTHS_SHORT = [
   "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek",
 ];
 
+const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent UTC+5
+
 // So'nggi 12 oy bo'yicha kirim/chiqim (diagramma uchun)
 export const monthlyIncomeExpense = async () => {
-  const now = new Date();
-  // Joriy oy ham kirsin: 11 oy orqaga + joriy oy = 12 oy
-  const firstMonthStart = startOfDayTashkent(
-    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
-  );
-  const from = startOfDayTashkent(addMonths(firstMonthStart, -11));
-  const to = endOfDayTashkent(now);
+  // Joriy sana Tashkent vaqti bo'yicha aniqlanadi
+  const nowTashkent = new Date(Date.now() + TZ_OFFSET_MS);
+  const curYear = nowTashkent.getUTCFullYear();
+  const curMonth = nowTashkent.getUTCMonth(); // 0-11
+
+  // So'nggi 12 oy ro'yxati: 11 oy orqadan joriy oygacha
+  const seq = [];
+  for (let i = 11; i >= 0; i--) {
+    const total = curYear * 12 + curMonth - i;
+    seq.push({ year: Math.floor(total / 12), month: (total % 12) + 1 });
+  }
+
+  // Eng eski oy boshidan to hozirgacha bo'lgan oraliq (Tashkent oy chegarasi -> UTC instant)
+  const first = seq[0];
+  const from = new Date(Date.UTC(first.year, first.month - 1, 1) - TZ_OFFSET_MS);
+  const to = new Date();
 
   const rows = await Transaction.aggregate([
     { $match: { date: { $gte: from, $lte: to } } },
@@ -197,22 +208,18 @@ export const monthlyIncomeExpense = async () => {
     byMonth.set(r._id.ym, cur);
   }
 
-  const months = [];
-  for (let i = 0; i < 12; i++) {
-    const d = addMonths(firstMonthStart, i);
-    const year = d.getUTCFullYear();
-    const month = d.getUTCMonth() + 1;
+  const months = seq.map(({ year, month }) => {
     const key = `${year}-${String(month).padStart(2, "0")}`;
     const data = byMonth.get(key) || { income: 0, expense: 0 };
-    months.push({
+    return {
       year,
       month,
       label: `${UZ_MONTHS_SHORT[month - 1]} ${String(year).slice(2)}`,
       income: data.income,
       expense: data.expense,
       profit: data.income - data.expense,
-    });
-  }
+    };
+  });
 
   return { months };
 };
