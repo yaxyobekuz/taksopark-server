@@ -7,7 +7,7 @@ export const registerUserSchema = z.object({
     lastName: z.string().min(1, "Familiya kerak").max(60),
     username: z.string().min(3, "Username kamida 3 belgidan iborat").max(40),
     phone: z.string().min(9, "Telefon kerak"),
-    password: z.string().min(6, "Parol kamida 6 belgidan iborat"),
+    password: z.string().min(8, "Parol kamida 8 belgidan iborat"),
     role: z.enum([ROLES.TEACHER, ROLES.STUDENT]),
 
     birthDate: z.union([z.coerce.date(), z.null()]).optional(),

@@ -39,11 +39,8 @@ const seed = async () => {
       await Role.findOneAndUpdate(
         { value },
         {
-          $setOnInsert: {
-            value,
-            label: labels[value],
-            permissions: [],
-          },
+          $setOnInsert: { value, permissions: [] },
+          $set: { label: labels[value] },
         },
         { upsert: true, new: true },
       );

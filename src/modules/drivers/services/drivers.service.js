@@ -89,6 +89,9 @@ export const list = async ({ tariff, status, carId, search, depositBelow, page =
   if (status) filter.status = status;
   if (carId) filter.car = carId;
   if (depositBelow !== undefined) {
+    if (tariff && tariff !== TARIFFS.DEPOSIT) {
+      throw new ApiError(400, "depositBelow faqat depozit tarifi uchun");
+    }
     filter.tariff = TARIFFS.DEPOSIT;
     filter.depositRemaining = { $lt: Number(depositBelow) };
   }
