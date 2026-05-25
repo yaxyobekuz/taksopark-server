@@ -3,8 +3,6 @@ import { connectDB, disconnectDB } from "../config/db.js";
 import Car from "../models/car.model.js";
 import logger from "../config/logger.js";
 
-const inDays = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
-
 // 30 ta O'zbekiston mashinasi - real region kodlari va modellar
 const CARS = [
   { plateNumber: "01A123BC", model: "Cobalt", notes: "Oq, 2022" },
@@ -42,14 +40,7 @@ const CARS = [
 const seed = async () => {
   await connectDB();
 
-  // Hujjat muddatlarini har xil qilamiz - badge/widgetlarni sinash uchun
-  const docs = CARS.map((c, i) => ({
-    ...c,
-    licenseExpiryDate: inDays([400, 15, -10, 200, 90][i % 5]),
-    powerOfAttorneyExpiryDate: inDays([180, 25, 90, -5, 365][i % 5]),
-  }));
-
-  const result = await Car.insertMany(docs, { ordered: false });
+  const result = await Car.insertMany(CARS, { ordered: false });
   logger.info(`Mashinalar qo'shildi: ${result.length}`);
 
   await disconnectDB();

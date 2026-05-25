@@ -13,6 +13,7 @@ export const PERMISSIONS = Object.freeze({
   CARS_CREATE: "cars.create",
   CARS_UPDATE: "cars.update",
   CARS_DELETE: "cars.delete",
+  CARS_DOCUMENTS_MANAGE: "cars.documents.manage",
 
   PAYMENTS_READ: "payments.read",
   PAYMENTS_CREATE: "payments.create",
@@ -56,6 +57,7 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.CARS_CREATE]: { label: "Mashina qo'shish", group: "cars" },
   [PERMISSIONS.CARS_UPDATE]: { label: "Mashinani tahrirlash", group: "cars" },
   [PERMISSIONS.CARS_DELETE]: { label: "Mashinani o'chirish", group: "cars" },
+  [PERMISSIONS.CARS_DOCUMENTS_MANAGE]: { label: "Mashina hujjat turlarini boshqarish", group: "cars" },
 
   [PERMISSIONS.PAYMENTS_READ]: { label: "Kunlik to'lovlarni ko'rish", group: "payments" },
   [PERMISSIONS.PAYMENTS_CREATE]: { label: "Kunlik to'lov qo'shish", group: "payments" },

@@ -7,6 +7,11 @@ const dateField = z.preprocess(
   z.coerce.date().nullable().optional(),
 );
 
+const boolFlag = z.preprocess(
+  (v) => (typeof v === "string" ? v === "true" : v),
+  z.boolean().optional(),
+);
+
 export const idSchema = z.object({
   params: z.object({ id: objectId }),
 });
@@ -32,8 +37,6 @@ export const createSchema = z.object({
     plateNumber: z.string().trim().optional(),
     model: z.string().trim().min(1, "Model kerak"),
     notes: z.string().optional(),
-    licenseExpiryDate: dateField,
-    powerOfAttorneyExpiryDate: dateField,
   }),
 });
 
@@ -43,8 +46,26 @@ export const updateSchema = z.object({
     plateNumber: z.string().trim().optional(),
     model: z.string().trim().min(1).optional(),
     notes: z.string().optional(),
-    isActive: z.boolean().optional(),
-    licenseExpiryDate: dateField,
-    powerOfAttorneyExpiryDate: dateField,
+    isActive: boolFlag,
+  }),
+});
+
+export const addDocumentSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    documentType: objectId,
+    expiryDate: dateField,
+  }),
+});
+
+export const docIdSchema = z.object({
+  params: z.object({ id: objectId, docId: objectId }),
+});
+
+export const updateDocumentSchema = z.object({
+  params: z.object({ id: objectId, docId: objectId }),
+  body: z.object({
+    expiryDate: dateField,
+    removeFile: boolFlag,
   }),
 });

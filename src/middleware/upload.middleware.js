@@ -47,6 +47,13 @@ export const uploader = (entity, { maxFiles = 10 } = {}) =>
     fileFilter,
   }).array("attachments", maxFiles);
 
+export const singleUploader = (entity, field = "photo") =>
+  multer({
+    storage: buildStorage(entity),
+    limits: { fileSize: MAX_SIZE, files: 1 },
+    fileFilter,
+  }).single(field);
+
 export const buildPublicUrl = (entity, filename, date = new Date()) => {
   const yyyy = String(date.getUTCFullYear());
   const mm = String(date.getUTCMonth() + 1).padStart(2, "0");

@@ -2,6 +2,7 @@ import "dotenv/config";
 import { connectDB, disconnectDB } from "../config/db.js";
 import Permission from "../models/permission.model.js";
 import Role from "../models/role.model.js";
+import CarDocumentType from "../models/carDocumentType.model.js";
 import { PERMISSIONS, PERMISSION_LABELS } from "../constants/permissions.js";
 import { ALL_ROLES } from "../constants/roles.js";
 import logger from "../config/logger.js";
@@ -40,6 +41,16 @@ const seed = async () => {
   await Role.deleteMany({ value: { $in: ["teacher", "student"] } });
 
   logger.info("Rollar seed qilindi");
+
+  const defaultCarDocTypes = ["Litsenziya", "Dovernost"];
+  for (const name of defaultCarDocTypes) {
+    await CarDocumentType.findOneAndUpdate(
+      { name },
+      { $setOnInsert: { name } },
+      { upsert: true, new: true },
+    );
+  }
+  logger.info(`Default mashina hujjat turlari: ${defaultCarDocTypes.length}`);
 
   await disconnectDB();
 };

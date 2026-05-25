@@ -34,30 +34,11 @@ const seed = async () => {
   const owner = await User.findOne({ username: "owner" });
   if (!owner) throw new Error("Owner user yo'q. Avval npm run seed:owner");
 
-  // 4 ta mashina (har xil muddat holatlari - widget va badge'larni sinash uchun)
-  const inDays = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+  // 4 ta mashina
   const cars = await Car.insertMany([
-    {
-      plateNumber: "01A111AA",
-      model: "Cobalt",
-      notes: "Oq, 2022",
-      licenseExpiryDate: inDays(400),
-      powerOfAttorneyExpiryDate: inDays(180),
-    },
-    {
-      plateNumber: "01A222BB",
-      model: "Spark",
-      notes: "Qora, 2021",
-      licenseExpiryDate: inDays(15),
-      powerOfAttorneyExpiryDate: inDays(90),
-    },
-    {
-      plateNumber: "01A333CC",
-      model: "Nexia 3",
-      notes: "Kumush, 2020",
-      licenseExpiryDate: inDays(-10),
-      powerOfAttorneyExpiryDate: inDays(25),
-    },
+    { plateNumber: "01A111AA", model: "Cobalt", notes: "Oq, 2022" },
+    { plateNumber: "01A222BB", model: "Spark", notes: "Qora, 2021" },
+    { plateNumber: "01A333CC", model: "Nexia 3", notes: "Kumush, 2020" },
     { plateNumber: "01A444DD", model: "Lacetti", notes: "Oq, 2019" },
   ]);
   logger.info(`Cars: ${cars.length}`);
