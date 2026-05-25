@@ -9,7 +9,7 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const populateDocs = (q) =>
   q.populate("documents.documentType", "name").populate(
     "currentDriver",
-    "firstName lastName phone status tariff",
+    "firstName lastName phone status tariff photoUrl startDate depositRemaining depositInitial",
   );
 
 export const list = async ({ search, isActive, page = 1, limit = 20 }) => {
