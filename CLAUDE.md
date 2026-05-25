@@ -80,7 +80,7 @@ import ApiError from "@/utils/ApiError.js";
 export const create = async (body, currentUser) => {
   const exists = await User.findOne({ phone: body.phone });
   if (exists) throw new ApiError(409, "Bunday foydalanuvchi mavjud");
-  return User.create({ ...body, role: "student" });
+  return User.create({ ...body, role: "owner" });
 };
 ```
 
@@ -121,7 +121,7 @@ Error (emitted by the central `errorHandler`):
 
 ## Role and permission
 
-- `User.role: "owner" | "teacher" | "student"` (static enum).
+- `User.role: "owner"` (single static role for now; the enum lives in `constants/roles.js` and can be extended).
 - Owner - always has every permission (hard rule in the code base).
 - `Permission` collection: `{ key, label, group }`.
 - Permissions are attached to a role via `Role.permissions: ObjectId[]`.

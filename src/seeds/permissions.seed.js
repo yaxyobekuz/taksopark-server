@@ -3,7 +3,7 @@ import { connectDB, disconnectDB } from "../config/db.js";
 import Permission from "../models/permission.model.js";
 import Role from "../models/role.model.js";
 import { PERMISSIONS, PERMISSION_LABELS } from "../constants/permissions.js";
-import { ALL_ROLES, ROLES } from "../constants/roles.js";
+import { ALL_ROLES } from "../constants/roles.js";
 import logger from "../config/logger.js";
 
 const seed = async () => {
@@ -24,28 +24,21 @@ const seed = async () => {
   }
   logger.info(`Permissions seed qilindi: ${Object.keys(permIds).length}`);
 
-  const labels = { owner: "Egasi", teacher: "O'qituvchi", student: "O'quvchi" };
+  const labels = { owner: "Egasi" };
   for (const value of ALL_ROLES) {
-    if (value === ROLES.OWNER) {
-      await Role.findOneAndUpdate(
-        { value },
-        {
-          $setOnInsert: { value, label: labels[value] },
-          $set: { permissions: Object.values(permIds) },
-        },
-        { upsert: true, new: true },
-      );
-    } else {
-      await Role.findOneAndUpdate(
-        { value },
-        {
-          $setOnInsert: { value, permissions: [] },
-          $set: { label: labels[value] },
-        },
-        { upsert: true, new: true },
-      );
-    }
+    await Role.findOneAndUpdate(
+      { value },
+      {
+        $setOnInsert: { value, label: labels[value] },
+        $set: { permissions: Object.values(permIds) },
+      },
+      { upsert: true, new: true },
+    );
   }
+
+  // Eski teacher/student rollarini tozalash (shablondan qolgan)
+  await Role.deleteMany({ value: { $in: ["teacher", "student"] } });
+
   logger.info("Rollar seed qilindi");
 
   await disconnectDB();

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 export const HTTP_METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"];
-export const ACTOR_ROLES = ["owner", "teacher", "student", "system"];
+export const ACTOR_ROLES = ["owner", "system"];
 
 const activityLogSchema = new mongoose.Schema(
   {

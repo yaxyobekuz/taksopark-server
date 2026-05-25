@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
     username: { type: String, trim: true, unique: true, required: true, lowercase: true },
     phone: { type: String, trim: true, unique: true, sparse: true },
     passwordHash: { type: String, required: true, select: false },
-    role: { type: String, enum: ALL_ROLES, default: ROLES.STUDENT, required: true },
+    role: { type: String, enum: ALL_ROLES, default: ROLES.OWNER, required: true },
     isActive: { type: Boolean, default: true },
 
     birthDate: { type: Date, default: null },

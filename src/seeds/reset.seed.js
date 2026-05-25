@@ -60,8 +60,11 @@ const seed = async () => {
   }
   logger.info(`Permissions seed qilindi: ${Object.keys(permIds).length}`);
 
-  // Rollarni qayta seed qilish - owner barcha permissionga ega, qolganlari bo'sh
-  const labels = { owner: "Egasi", teacher: "O'qituvchi", student: "O'quvchi" };
+  // Eski teacher/student rollarini tozalash (shablondan qolgan)
+  await Role.deleteMany({ value: { $in: ["teacher", "student"] } });
+
+  // Rollarni qayta seed qilish - owner barcha permissionga ega
+  const labels = { owner: "Egasi" };
   for (const value of ALL_ROLES) {
     await Role.findOneAndUpdate(
       { value },
