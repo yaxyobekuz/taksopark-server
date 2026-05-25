@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import ApiError from "../utils/ApiError.js";
 
 const UPLOAD_ROOT = path.resolve("uploads");
-const MAX_SIZE = 5 * 1024 * 1024;
+const MAX_SIZE = 20 * 1024 * 1024;
 const ALLOWED_MIME = /^(image\/(jpeg|jpg|png|webp|gif)|application\/pdf)$/i;
 
 const ensureDir = (dir) => {
