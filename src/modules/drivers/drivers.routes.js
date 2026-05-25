@@ -2,6 +2,7 @@ import { Router } from "express";
 import requireAuth from "../../middleware/auth.js";
 import requirePermission from "../../middleware/requirePermission.js";
 import validate from "../../middleware/validate.js";
+import { singleUploader } from "../../middleware/upload.middleware.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
 import {
   listSchema,
@@ -25,8 +26,8 @@ router.get("/warnings", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ)
 router.get("/", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), validate(listSchema), list);
 router.get("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), validate(idSchema), getById);
 router.get("/:id/balance", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), validate(idSchema), getBalance);
-router.post("/", requireAuth, requirePermission(PERMISSIONS.DRIVERS_CREATE), validate(createSchema), create);
-router.patch("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_UPDATE), validate(updateSchema), update);
+router.post("/", requireAuth, requirePermission(PERMISSIONS.DRIVERS_CREATE), singleUploader("drivers", "photo"), validate(createSchema), create);
+router.patch("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_UPDATE), singleUploader("drivers", "photo"), validate(updateSchema), update);
 router.post("/:id/end-trial", requireAuth, requirePermission(PERMISSIONS.DRIVERS_END_TRIAL), validate(endTrialSchema), endTrial);
 router.delete("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_DELETE), validate(idSchema), remove);
 

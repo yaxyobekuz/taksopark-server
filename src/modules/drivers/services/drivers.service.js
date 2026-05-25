@@ -5,6 +5,7 @@ import Oylik from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
 import { startOfDayTashkent, daysBetween, addDays } from "../../../utils/timezone.js";
+import { removeFileByUrl } from "../../../utils/fileStorage.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -133,6 +134,7 @@ export const create = async (body) => {
     depositInitial: cfg.depositInitial,
     depositRemaining: cfg.depositInitial,
     notes: body.notes || "",
+    photoUrl: body.photoUrl || "",
   });
   if (body.carId) {
     await attachCarToDriver(driver, body.carId);
@@ -153,6 +155,12 @@ export const update = async (id, body) => {
   if (body.lastName !== undefined) driver.lastName = body.lastName;
   if (body.notes !== undefined) driver.notes = body.notes;
 
+  let oldPhotoUrl = null;
+  if (body.photoUrl !== undefined && body.photoUrl !== driver.photoUrl) {
+    oldPhotoUrl = driver.photoUrl;
+    driver.photoUrl = body.photoUrl;
+  }
+
   if (body.carId !== undefined) {
     if (body.carId === null) {
       await detachCarFromDriver(driver);
@@ -163,6 +171,7 @@ export const update = async (id, body) => {
     }
   }
   await driver.save();
+  if (oldPhotoUrl) removeFileByUrl(oldPhotoUrl);
   return driver;
 };
 
