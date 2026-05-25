@@ -2,14 +2,10 @@ import User from "../../../models/user.model.js";
 import RefreshToken from "../../../models/refreshToken.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { signAccess, signRefresh, verifyRefresh } from "../../../utils/jwt.js";
-import {
-  hashPassword,
-  comparePassword,
-} from "../../../helpers/password.helper.js";
+import { comparePassword } from "../../../helpers/password.helper.js";
 import { collectPermissions } from "../../../helpers/permission.helper.js";
 import { sha256 } from "../../../utils/hashToken.js";
 import { normalizePhone, isPhoneLike } from "../../../utils/phone.js";
-import { ROLES } from "../../../constants/roles.js";
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -111,38 +107,3 @@ export const me = async (user) => {
   };
 };
 
-export const registerUser = async (body) => {
-  const phone = body.phone ? normalizePhone(body.phone) : null;
-  if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
-
-  const username = String(body.username).toLowerCase().trim();
-
-  const conflictFilters = [{ username }];
-  if (phone) conflictFilters.push({ phone });
-  const conflict = await User.findOne({ $or: conflictFilters });
-  if (conflict) {
-    throw new ApiError(409, "Bunday foydalanuvchi allaqachon mavjud");
-  }
-
-  if (![ROLES.TEACHER, ROLES.STUDENT].includes(body.role)) {
-    throw new ApiError(400, "Noto'g'ri rol");
-  }
-
-  const passwordHash = await hashPassword(body.password);
-
-  const doc = {
-    firstName: body.firstName.trim(),
-    lastName: body.lastName.trim(),
-    username,
-    phone: phone || undefined,
-    passwordHash,
-    role: body.role,
-    isActive: true,
-    birthDate: body.birthDate ? new Date(body.birthDate) : null,
-    gender: body.gender || null,
-    address: body.address || "",
-  };
-
-  const user = await User.create(doc);
-  return sanitizeUser(user);
-};
