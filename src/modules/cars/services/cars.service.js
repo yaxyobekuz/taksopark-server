@@ -125,28 +125,37 @@ export const softRemove = async (id) => {
   return car;
 };
 
-const buildFileAttachment = (file) => {
-  if (!file) return null;
-  return {
-    url: fileToPublicUrl(file),
-    filename: file.originalname,
-    mime: file.mimetype,
-    size: file.size,
-  };
+const buildFilesPayload = (files = []) =>
+  files.map((f) => ({
+    url: fileToPublicUrl(f),
+    filename: f.originalname,
+    mime: f.mimetype,
+    size: f.size,
+  }));
+
+const cleanupUploadedFiles = (files = []) => {
+  for (const f of files) removeFileByUrl(fileToPublicUrl(f));
 };
 
-export const addDocument = async (carId, { documentType, expiryDate }, file) => {
+export const addDocument = async (
+  carId,
+  { documentType, expiryDate },
+  files = [],
+) => {
   const car = await Car.findById(carId);
-  if (!car) throw new ApiError(404, "Mashina topilmadi");
+  if (!car) {
+    cleanupUploadedFiles(files);
+    throw new ApiError(404, "Mashina topilmadi");
+  }
   const typeDoc = await CarDocumentType.findById(documentType);
   if (!typeDoc) {
-    if (file) removeFileByUrl(buildFileAttachment(file)?.url);
+    cleanupUploadedFiles(files);
     throw new ApiError(404, "Hujjat turi topilmadi");
   }
   car.documents.push({
     documentType,
     expiryDate: expiryDate || null,
-    file: buildFileAttachment(file),
+    files: buildFilesPayload(files),
   });
   await car.save();
   return populateDocs(Car.findById(car._id));
@@ -155,28 +164,35 @@ export const addDocument = async (carId, { documentType, expiryDate }, file) => 
 export const updateDocument = async (
   carId,
   docId,
-  { expiryDate, removeFile },
-  file,
+  { expiryDate, removeFileUrls = [] },
+  files = [],
 ) => {
   const car = await Car.findById(carId);
   if (!car) {
-    if (file) removeFileByUrl(buildFileAttachment(file)?.url);
+    cleanupUploadedFiles(files);
     throw new ApiError(404, "Mashina topilmadi");
   }
   const doc = car.documents.id(docId);
   if (!doc) {
-    if (file) removeFileByUrl(buildFileAttachment(file)?.url);
+    cleanupUploadedFiles(files);
     throw new ApiError(404, "Hujjat topilmadi");
   }
 
   if (expiryDate !== undefined) doc.expiryDate = expiryDate || null;
 
-  if (file) {
-    if (doc.file?.url) removeFileByUrl(doc.file.url);
-    doc.file = buildFileAttachment(file);
-  } else if (removeFile) {
-    if (doc.file?.url) removeFileByUrl(doc.file.url);
-    doc.file = null;
+  if (Array.isArray(removeFileUrls) && removeFileUrls.length) {
+    const toRemove = new Set(removeFileUrls);
+    doc.files = doc.files.filter((f) => {
+      if (toRemove.has(f.url)) {
+        removeFileByUrl(f.url);
+        return false;
+      }
+      return true;
+    });
+  }
+
+  if (files.length) {
+    doc.files.push(...buildFilesPayload(files));
   }
 
   await car.save();
@@ -188,7 +204,7 @@ export const removeDocument = async (carId, docId) => {
   if (!car) throw new ApiError(404, "Mashina topilmadi");
   const doc = car.documents.id(docId);
   if (!doc) throw new ApiError(404, "Hujjat topilmadi");
-  if (doc.file?.url) removeFileByUrl(doc.file.url);
+  for (const f of doc.files || []) removeFileByUrl(f.url);
   doc.deleteOne();
   await car.save();
   return populateDocs(Car.findById(car._id));

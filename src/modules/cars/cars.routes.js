@@ -37,7 +37,7 @@ router.post(
   "/:id/documents",
   requireAuth,
   requirePermission(PERMISSIONS.CARS_UPDATE),
-  uploader("cars", { maxFiles: 1 }),
+  uploader("cars", { maxFiles: 10 }),
   validate(addDocumentSchema),
   addDocument,
 );
@@ -45,7 +45,7 @@ router.patch(
   "/:id/documents/:docId",
   requireAuth,
   requirePermission(PERMISSIONS.CARS_UPDATE),
-  uploader("cars", { maxFiles: 1 }),
+  uploader("cars", { maxFiles: 10 }),
   validate(updateDocumentSchema),
   updateDocument,
 );

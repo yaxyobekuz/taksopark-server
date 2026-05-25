@@ -12,6 +12,12 @@ const boolFlag = z.preprocess(
   z.boolean().optional(),
 );
 
+const stringArray = z.preprocess((v) => {
+  if (v === undefined || v === null || v === "") return [];
+  if (Array.isArray(v)) return v;
+  return [v];
+}, z.array(z.string()).optional());
+
 export const idSchema = z.object({
   params: z.object({ id: objectId }),
 });
@@ -66,6 +72,6 @@ export const updateDocumentSchema = z.object({
   params: z.object({ id: objectId, docId: objectId }),
   body: z.object({
     expiryDate: dateField,
-    removeFile: boolFlag,
+    removeFileUrls: stringArray,
   }),
 });

@@ -14,7 +14,7 @@ const carDocumentSchema = new mongoose.Schema(
   {
     documentType: { type: mongoose.Schema.Types.ObjectId, ref: "CarDocumentType", required: true },
     expiryDate: { type: Date, default: null },
-    file: { type: carDocumentFileSchema, default: null },
+    files: { type: [carDocumentFileSchema], default: [] },
   },
   { _id: true, timestamps: true },
 );
