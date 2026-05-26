@@ -258,7 +258,7 @@ export const warnings = async () => {
     status: DRIVER_STATUS.ACTIVE,
     depositRemaining: { $gt: 0, $lt: threshold },
   })
-    .populate("car", "plateNumber model")
+    .populate("car", "plateNumber model photoUrl")
     .sort({ depositRemaining: 1 });
 
   const depositEmpty = await Driver.find({
@@ -266,11 +266,11 @@ export const warnings = async () => {
     status: DRIVER_STATUS.ACTIVE,
     depositRemaining: { $lte: 0 },
   })
-    .populate("car", "plateNumber model")
+    .populate("car", "plateNumber model photoUrl")
     .sort({ depositRemaining: 1 });
 
   const activeDrivers = await Driver.find({ status: DRIVER_STATUS.ACTIVE })
-    .populate("car", "plateNumber model");
+    .populate("car", "plateNumber model photoUrl");
   const noPayment2Days = [];
   for (const d of activeDrivers) {
     const last = await DailyPayment.findOne({ driver: d._id }).sort({ date: -1 });
@@ -296,7 +296,7 @@ const cleanupUploadedFiles = (files = []) => {
 
 const populateDriverDocs = (q) =>
   q
-    .populate("car", "plateNumber model")
+    .populate("car", "plateNumber model photoUrl")
     .populate("documents.documentType", "name");
 
 export const addDocument = async (
