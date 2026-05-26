@@ -40,7 +40,7 @@ const fileFilter = (_req, file, cb) => {
   cb(null, true);
 };
 
-export const uploader = (entity, { maxFiles = 10 } = {}) =>
+export const uploader = (entity, { maxFiles = 30 } = {}) =>
   multer({
     storage: buildStorage(entity),
     limits: { fileSize: MAX_SIZE, files: maxFiles },
