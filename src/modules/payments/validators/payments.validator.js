@@ -17,12 +17,6 @@ export const listSchema = z.object({
   }),
 });
 
-export const todayTotalSchema = z.object({
-  query: z.object({
-    date: z.string().optional(),
-  }),
-});
-
 export const createSchema = z.object({
   body: z.object({
     driverId: objectId,

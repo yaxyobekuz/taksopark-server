@@ -66,43 +66,6 @@ export const list = async ({ driverId, carId, fromDate, toDate, page = 1, limit 
   return { items, total };
 };
 
-export const todayTotal = async ({ date }) => {
-  const target = startOfDayTashkent(date || new Date());
-
-  const drivers = await Driver.find({
-    status: DRIVER_STATUS.ACTIVE,
-    car: { $ne: null },
-  })
-    .populate("car", "plateNumber model")
-    .lean();
-
-  const paidRows = await DailyPayment.aggregate([
-    { $match: { date: target } },
-    { $group: { _id: "$car", amount: { $sum: "$amount" } } },
-  ]);
-  const paidByCar = new Map(paidRows.map((r) => [String(r._id), r.amount]));
-
-  const perCar = drivers
-    .filter((d) => d.car)
-    .map((d) => {
-      const phase = getActiveTariffPhase(d, target);
-      const expected = phase.phase === "salary" ? 0 : phase.dailyPlan;
-      return {
-        carId: String(d.car._id),
-        plateNumber: d.car.plateNumber,
-        model: d.car.model,
-        expected,
-        amount: paidByCar.get(String(d.car._id)) || 0,
-      };
-    })
-    .sort((a, b) => (a.plateNumber || "").localeCompare(b.plateNumber || ""));
-
-  const totalExpected = perCar.reduce((s, r) => s + r.expected, 0);
-  const totalAmount = perCar.reduce((s, r) => s + r.amount, 0);
-
-  return { date: target, totalAmount, totalExpected, perCar };
-};
-
 export const create = async (body, currentUser) => {
   const driver = await Driver.findById(body.driverId);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
