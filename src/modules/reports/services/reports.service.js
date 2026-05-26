@@ -3,11 +3,12 @@ import DailyPayment from "../../../models/dailyPayment.model.js";
 import Fine from "../../../models/fine.model.js";
 import Damage from "../../../models/damage.model.js";
 import Oylik from "../../../models/oylik.model.js";
-import Driver from "../../../models/driver.model.js";
+import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
 import Transaction, { TRANSACTION_TYPES } from "../../../models/transaction.model.js";
 import { startOfDayTashkent, endOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
+import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
 
 export const dailyPlanTotal = async ({ date }) => {
   const target = startOfDayTashkent(date || new Date());
@@ -222,4 +223,75 @@ export const monthlyIncomeExpense = async () => {
   });
 
   return { months };
+};
+
+// Tanlangan oydagi depozitli haydovchilar progressi: kutilgan/to'langan/qarz.
+export const depositDriversMonthly = async ({ year, month, driverId }) => {
+  const lastDay = new Date(year, month, 0).getDate();
+  const pad = (n) => String(n).padStart(2, "0");
+  const from = startOfDayTashkent(`${year}-${pad(month)}-01`);
+  const to = endOfDayTashkent(`${year}-${pad(month)}-${pad(lastDay)}`);
+
+  const expectedPerDriver = lastDay * TARIFF_CONFIG[TARIFFS.DEPOSIT].dailyPlan;
+
+  const driverFilter = {
+    tariff: TARIFFS.DEPOSIT,
+    status: DRIVER_STATUS.ACTIVE,
+  };
+  if (driverId) driverFilter._id = oid(driverId);
+
+  const drivers = await Driver.find(driverFilter)
+    .populate("car", "plateNumber model")
+    .lean();
+
+  const paidMatch = {
+    date: { $gte: from, $lte: to },
+    tariffSnapshot: TARIFFS.DEPOSIT,
+  };
+  if (driverId) paidMatch.driver = oid(driverId);
+
+  const paidRows = await DailyPayment.aggregate([
+    { $match: paidMatch },
+    { $group: { _id: "$driver", paid: { $sum: "$amount" } } },
+  ]);
+  const paidByDriver = new Map(paidRows.map((r) => [String(r._id), r.paid]));
+
+  const rows = drivers
+    .map((d) => {
+      const paid = paidByDriver.get(String(d._id)) || 0;
+      const debt = Math.max(0, expectedPerDriver - paid);
+      const percent =
+        expectedPerDriver > 0
+          ? Math.min(100, Math.round((paid / expectedPerDriver) * 100))
+          : 0;
+      return {
+        driverId: String(d._id),
+        firstName: d.firstName,
+        lastName: d.lastName,
+        photoUrl: d.photoUrl || "",
+        car: d.car
+          ? { _id: String(d.car._id), plateNumber: d.car.plateNumber, model: d.car.model }
+          : null,
+        expected: expectedPerDriver,
+        paid,
+        debt,
+        percent,
+      };
+    })
+    .sort((a, b) => {
+      if (b.debt !== a.debt) return b.debt - a.debt;
+      return (a.lastName || "").localeCompare(b.lastName || "");
+    });
+
+  const totals = rows.reduce(
+    (acc, r) => {
+      acc.expected += r.expected;
+      acc.paid += r.paid;
+      acc.debt += r.debt;
+      return acc;
+    },
+    { expected: 0, paid: 0, debt: 0 },
+  );
+
+  return { year, month, from, to, rows, totals };
 };
