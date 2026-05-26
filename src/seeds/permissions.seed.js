@@ -3,6 +3,7 @@ import { connectDB, disconnectDB } from "../config/db.js";
 import Permission from "../models/permission.model.js";
 import Role from "../models/role.model.js";
 import CarDocumentType from "../models/carDocumentType.model.js";
+import DriverDocumentType from "../models/driverDocumentType.model.js";
 import { PERMISSIONS, PERMISSION_LABELS } from "../constants/permissions.js";
 import { ALL_ROLES } from "../constants/roles.js";
 import logger from "../config/logger.js";
@@ -51,6 +52,16 @@ const seed = async () => {
     );
   }
   logger.info(`Default mashina hujjat turlari: ${defaultCarDocTypes.length}`);
+
+  const defaultDriverDocTypes = ["Pasport", "Haydovchilik guvohnomasi"];
+  for (const name of defaultDriverDocTypes) {
+    await DriverDocumentType.findOneAndUpdate(
+      { name },
+      { $setOnInsert: { name } },
+      { upsert: true, new: true },
+    );
+  }
+  logger.info(`Default haydovchi hujjat turlari: ${defaultDriverDocTypes.length}`);
 
   await disconnectDB();
 };

@@ -2,10 +2,11 @@ import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
 import DailyPayment from "../../../models/dailyPayment.model.js";
 import Oylik from "../../../models/oylik.model.js";
+import DriverDocumentType from "../../../models/driverDocumentType.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
 import { startOfDayTashkent, daysBetween, addDays } from "../../../utils/timezone.js";
-import { removeFileByUrl } from "../../../utils/fileStorage.js";
+import { removeFileByUrl, fileToPublicUrl } from "../../../utils/fileStorage.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -103,7 +104,7 @@ export const list = async ({ tariff, status, carId, search, depositBelow, page =
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
     Driver.find(filter)
-      .populate("car", "plateNumber model")
+      .populate("car", "plateNumber model photoUrl notes isActive")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -113,7 +114,9 @@ export const list = async ({ tariff, status, carId, search, depositBelow, page =
 };
 
 export const getById = async (id) => {
-  const driver = await Driver.findById(id).populate("car", "plateNumber model");
+  const driver = await Driver.findById(id)
+    .populate("car", "plateNumber model photoUrl notes isActive")
+    .populate("documents.documentType", "name");
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
   return driver;
 };
@@ -277,4 +280,94 @@ export const warnings = async () => {
   }
 
   return { depositLow, depositEmpty, noPayment2Days };
+};
+
+const buildFilesPayload = (files = []) =>
+  files.map((f) => ({
+    url: fileToPublicUrl(f),
+    filename: f.originalname,
+    mime: f.mimetype,
+    size: f.size,
+  }));
+
+const cleanupUploadedFiles = (files = []) => {
+  for (const f of files) removeFileByUrl(fileToPublicUrl(f));
+};
+
+const populateDriverDocs = (q) =>
+  q
+    .populate("car", "plateNumber model")
+    .populate("documents.documentType", "name");
+
+export const addDocument = async (
+  driverId,
+  { documentType, expiryDate },
+  files = [],
+) => {
+  const driver = await Driver.findById(driverId);
+  if (!driver) {
+    cleanupUploadedFiles(files);
+    throw new ApiError(404, "Haydovchi topilmadi");
+  }
+  const typeDoc = await DriverDocumentType.findById(documentType);
+  if (!typeDoc) {
+    cleanupUploadedFiles(files);
+    throw new ApiError(404, "Hujjat turi topilmadi");
+  }
+  driver.documents.push({
+    documentType,
+    expiryDate: expiryDate || null,
+    files: buildFilesPayload(files),
+  });
+  await driver.save();
+  return populateDriverDocs(Driver.findById(driver._id));
+};
+
+export const updateDocument = async (
+  driverId,
+  docId,
+  { expiryDate, removeFileUrls = [] },
+  files = [],
+) => {
+  const driver = await Driver.findById(driverId);
+  if (!driver) {
+    cleanupUploadedFiles(files);
+    throw new ApiError(404, "Haydovchi topilmadi");
+  }
+  const doc = driver.documents.id(docId);
+  if (!doc) {
+    cleanupUploadedFiles(files);
+    throw new ApiError(404, "Hujjat topilmadi");
+  }
+
+  if (expiryDate !== undefined) doc.expiryDate = expiryDate || null;
+
+  if (Array.isArray(removeFileUrls) && removeFileUrls.length) {
+    const toRemove = new Set(removeFileUrls);
+    doc.files = doc.files.filter((f) => {
+      if (toRemove.has(f.url)) {
+        removeFileByUrl(f.url);
+        return false;
+      }
+      return true;
+    });
+  }
+
+  if (files.length) {
+    doc.files.push(...buildFilesPayload(files));
+  }
+
+  await driver.save();
+  return populateDriverDocs(Driver.findById(driver._id));
+};
+
+export const removeDocument = async (driverId, docId) => {
+  const driver = await Driver.findById(driverId);
+  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
+  const doc = driver.documents.id(docId);
+  if (!doc) throw new ApiError(404, "Hujjat topilmadi");
+  for (const f of doc.files || []) removeFileByUrl(f.url);
+  doc.deleteOne();
+  await driver.save();
+  return populateDriverDocs(Driver.findById(driver._id));
 };

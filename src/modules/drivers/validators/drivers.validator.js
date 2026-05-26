@@ -43,6 +43,37 @@ export const updateSchema = z.object({
   }),
 });
 
+const dateField = z.preprocess(
+  (v) => (v === "" || v == null ? null : v),
+  z.coerce.date().nullable().optional(),
+);
+
+const stringArray = z.preprocess((v) => {
+  if (v === undefined || v === null || v === "") return [];
+  if (Array.isArray(v)) return v;
+  return [v];
+}, z.array(z.string()).optional());
+
+export const addDocumentSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    documentType: objectId,
+    expiryDate: dateField,
+  }),
+});
+
+export const docIdSchema = z.object({
+  params: z.object({ id: objectId, docId: objectId }),
+});
+
+export const updateDocumentSchema = z.object({
+  params: z.object({ id: objectId, docId: objectId }),
+  body: z.object({
+    expiryDate: dateField,
+    removeFileUrls: stringArray,
+  }),
+});
+
 export const endTrialSchema = z.object({
   params: z.object({ id: objectId }),
   body: z.object({
