@@ -23,3 +23,9 @@ export const depositDriversMonthlySchema = z.object({
     driverId: objectId.optional(),
   }),
 });
+
+export const dailyIncomeExpenseSchema = z.object({
+  query: z.object({
+    days: z.coerce.number().int().min(1).max(365).optional(),
+  }),
+});

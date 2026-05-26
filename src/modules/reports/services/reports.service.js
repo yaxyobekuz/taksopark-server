@@ -225,6 +225,70 @@ export const monthlyIncomeExpense = async () => {
   return { months };
 };
 
+// So'nggi N kun bo'yicha kunlik kirim/chiqim (line chart uchun).
+export const dailyIncomeExpense = async ({ days = 30 }) => {
+  const nowTashkent = new Date(Date.now() + TZ_OFFSET_MS);
+  const curYear = nowTashkent.getUTCFullYear();
+  const curMonth = nowTashkent.getUTCMonth();
+  const curDay = nowTashkent.getUTCDate();
+
+  const seq = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(curYear, curMonth, curDay - i));
+    seq.push({
+      y: d.getUTCFullYear(),
+      m: d.getUTCMonth() + 1,
+      d: d.getUTCDate(),
+    });
+  }
+
+  const first = seq[0];
+  const from = new Date(Date.UTC(first.y, first.m - 1, first.d) - TZ_OFFSET_MS);
+  const to = new Date();
+
+  const rows = await Transaction.aggregate([
+    { $match: { date: { $gte: from, $lte: to } } },
+    {
+      $group: {
+        _id: {
+          ymd: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$date",
+              timezone: "Asia/Tashkent",
+            },
+          },
+          type: "$type",
+        },
+        amount: { $sum: "$amount" },
+      },
+    },
+  ]);
+
+  const byDay = new Map();
+  for (const r of rows) {
+    const cur = byDay.get(r._id.ymd) || { income: 0, expense: 0 };
+    if (r._id.type === TRANSACTION_TYPES.INCOME) cur.income = r.amount;
+    else if (r._id.type === TRANSACTION_TYPES.EXPENSE) cur.expense = r.amount;
+    byDay.set(r._id.ymd, cur);
+  }
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const items = seq.map(({ y, m, d }) => {
+    const key = `${y}-${pad(m)}-${pad(d)}`;
+    const data = byDay.get(key) || { income: 0, expense: 0 };
+    return {
+      date: key,
+      label: `${pad(d)}.${pad(m)}`,
+      income: data.income,
+      expense: data.expense,
+      profit: data.income - data.expense,
+    };
+  });
+
+  return { days, items };
+};
+
 // Tanlangan oydagi depozitli haydovchilar progressi: kutilgan/to'langan/qarz.
 export const depositDriversMonthly = async ({ year, month, driverId }) => {
   const lastDay = new Date(year, month, 0).getDate();

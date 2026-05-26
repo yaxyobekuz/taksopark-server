@@ -7,12 +7,14 @@ import {
   dailyPlanSchema,
   financeSchema,
   depositDriversMonthlySchema,
+  dailyIncomeExpenseSchema,
 } from "./validators/reports.validator.js";
 import dailyPlanTotal from "./handlers/dailyPlanTotal.handler.js";
 import finance from "./handlers/finance.handler.js";
 import minYear from "./handlers/minYear.handler.js";
 import monthlyIncomeExpense from "./handlers/monthlyIncomeExpense.handler.js";
 import depositDriversMonthly from "./handlers/depositDriversMonthly.handler.js";
+import dailyIncomeExpense from "./handlers/dailyIncomeExpense.handler.js";
 
 const router = Router();
 
@@ -48,6 +50,13 @@ router.get(
   requirePermission(PERMISSIONS.REPORTS_READ),
   validate(depositDriversMonthlySchema),
   depositDriversMonthly,
+);
+router.get(
+  "/daily-income-expense",
+  requireAuth,
+  requirePermission(PERMISSIONS.REPORTS_READ),
+  validate(dailyIncomeExpenseSchema),
+  dailyIncomeExpense,
 );
 
 export default router;
