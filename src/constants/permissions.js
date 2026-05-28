@@ -39,7 +39,9 @@ export const PERMISSIONS = Object.freeze({
 
   TRANSACTIONS_READ: "transactions.read",
   TRANSACTIONS_CREATE: "transactions.create",
+  TRANSACTIONS_UPDATE: "transactions.update",
   TRANSACTIONS_DELETE: "transactions.delete",
+  TRANSACTIONS_CATEGORIES_MANAGE: "transactions.categories.manage",
 
   REPORTS_READ: "reports.read",
 });
@@ -84,7 +86,9 @@ export const PERMISSION_LABELS = {
 
   [PERMISSIONS.TRANSACTIONS_READ]: { label: "Kirim-Chiqimni ko'rish", group: "transactions" },
   [PERMISSIONS.TRANSACTIONS_CREATE]: { label: "Kirim-Chiqim qo'shish", group: "transactions" },
+  [PERMISSIONS.TRANSACTIONS_UPDATE]: { label: "Kirim-Chiqimni tahrirlash", group: "transactions" },
   [PERMISSIONS.TRANSACTIONS_DELETE]: { label: "Kirim-Chiqimni o'chirish", group: "transactions" },
+  [PERMISSIONS.TRANSACTIONS_CATEGORIES_MANAGE]: { label: "Tranzaksiya kategoriyalarini boshqarish", group: "transactions" },
 
   [PERMISSIONS.REPORTS_READ]: { label: "Hisobotlarni ko'rish", group: "reports" },
 };

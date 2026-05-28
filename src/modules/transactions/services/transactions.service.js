@@ -67,6 +67,24 @@ export const create = async (body, currentUser) => {
   return tx;
 };
 
+export const update = async (id, body) => {
+  const tx = await Transaction.findById(id);
+  if (!tx) throw new ApiError(404, "Tranzaksiya topilmadi");
+  if (tx.source !== TRANSACTION_SOURCES.MANUAL) {
+    throw new ApiError(409, "Avtomat tranzaksiyalarni tahrirlab bo'lmaydi");
+  }
+  if (!body.category || !body.category.trim()) {
+    throw new ApiError(400, "Kategoriya kerak");
+  }
+  tx.type = body.type;
+  tx.category = body.category.trim();
+  tx.amount = body.amount;
+  if (body.date) tx.date = new Date(body.date);
+  tx.note = body.note || "";
+  await tx.save();
+  return tx;
+};
+
 export const remove = async (id) => {
   const tx = await Transaction.findById(id);
   if (!tx) throw new ApiError(404, "Tranzaksiya topilmadi");

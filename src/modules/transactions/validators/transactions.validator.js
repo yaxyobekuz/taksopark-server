@@ -36,3 +36,14 @@ export const createSchema = z.object({
     note: z.string().optional(),
   }),
 });
+
+export const updateSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    type: z.enum(Object.values(TRANSACTION_TYPES)),
+    category: z.string().trim().min(1, "Kategoriya kerak"),
+    amount: z.coerce.number().int().min(1),
+    date: z.string().optional(),
+    note: z.string().optional(),
+  }),
+});
