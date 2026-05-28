@@ -27,7 +27,7 @@ const seed = async () => {
   }
   logger.info(`Permissions seed qilindi: ${Object.keys(permIds).length}`);
 
-  const labels = { owner: "Egasi" };
+  const labels = { owner: "Egasi", admin: "Admin" };
   for (const value of ALL_ROLES) {
     await Role.findOneAndUpdate(
       { value },

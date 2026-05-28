@@ -2,7 +2,7 @@ import User from "../../../models/user.model.js";
 import RefreshToken from "../../../models/refreshToken.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { signAccess, signRefresh, verifyRefresh } from "../../../utils/jwt.js";
-import { comparePassword } from "../../../helpers/password.helper.js";
+import { verifyPassword } from "../../../helpers/password.helper.js";
 import { collectPermissions } from "../../../helpers/permission.helper.js";
 import { sha256 } from "../../../utils/hashToken.js";
 import { normalizePhone, isPhoneLike } from "../../../utils/phone.js";
@@ -30,6 +30,7 @@ export const issueTokens = async (user, { userAgent, ip }) => {
 export const sanitizeUser = (user) => {
   const obj = user.toJSON ? user.toJSON() : user;
   delete obj.passwordHash;
+  delete obj.password;
   return obj;
 };
 
@@ -41,12 +42,12 @@ export const login = async ({ login, password, userAgent, ip }) => {
   const filters = [{ username: trimmed.toLowerCase() }];
   if (phone) filters.push({ phone });
 
-  const user = await User.findOne({ $or: filters }).select("+passwordHash");
+  const user = await User.findOne({ $or: filters }).select("+passwordHash +password");
   if (!user || !user.isActive) {
     throw new ApiError(401, "Login yoki parol noto'g'ri");
   }
 
-  const ok = await comparePassword(password, user.passwordHash);
+  const ok = await verifyPassword(password, user);
   if (!ok) throw new ApiError(401, "Login yoki parol noto'g'ri");
 
   const { accessToken, refreshToken } = await issueTokens(user, {
@@ -99,11 +100,24 @@ export const logout = async ({ rawRefresh }) => {
 };
 
 export const me = async (user) => {
-  const permissions = await collectPermissions(user.role);
+  const permissions = await collectPermissions(user);
   return {
     user: sanitizeUser(user),
     role: user.role,
     permissions,
   };
+};
+
+// Foydalanuvchining o'z parolini o'zgartirishi (owner + admin uchun).
+export const changeMyPassword = async (user, { currentPassword, newPassword }) => {
+  const fresh = await User.findById(user._id).select("+password +passwordHash");
+  if (!fresh) throw new ApiError(404, "Foydalanuvchi topilmadi");
+
+  const ok = await verifyPassword(currentPassword, fresh);
+  if (!ok) throw new ApiError(400, "Joriy parol noto'g'ri");
+
+  fresh.password = newPassword;
+  fresh.passwordHash = undefined;
+  await fresh.save();
 };
 

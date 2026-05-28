@@ -3,6 +3,11 @@ export const PERMISSIONS = Object.freeze({
   USERS_READ: "users.read",
   ACTIVITY_LOGS_READ: "activity_logs.read",
 
+  ADMINS_READ: "admins.read",
+  ADMINS_CREATE: "admins.create",
+  ADMINS_UPDATE: "admins.update",
+  ADMINS_DELETE: "admins.delete",
+
   DRIVERS_READ: "drivers.read",
   DRIVERS_CREATE: "drivers.create",
   DRIVERS_UPDATE: "drivers.update",
@@ -49,6 +54,11 @@ export const PERMISSIONS = Object.freeze({
 export const PERMISSION_LABELS = {
   [PERMISSIONS.USERS_READ]: { label: "Foydalanuvchilarni ko'rish", group: "users" },
   [PERMISSIONS.ACTIVITY_LOGS_READ]: { label: "Faoliyat loglarini ko'rish", group: "audit" },
+
+  [PERMISSIONS.ADMINS_READ]: { label: "Adminlarni ko'rish", group: "admins" },
+  [PERMISSIONS.ADMINS_CREATE]: { label: "Admin qo'shish", group: "admins" },
+  [PERMISSIONS.ADMINS_UPDATE]: { label: "Adminni tahrirlash", group: "admins" },
+  [PERMISSIONS.ADMINS_DELETE]: { label: "Adminni o'chirish", group: "admins" },
 
   [PERMISSIONS.DRIVERS_READ]: { label: "Haydovchilarni ko'rish", group: "drivers" },
   [PERMISSIONS.DRIVERS_CREATE]: { label: "Haydovchi qo'shish", group: "drivers" },

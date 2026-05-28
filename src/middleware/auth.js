@@ -22,7 +22,7 @@ const requireAuth = asyncHandler(async (req, _res, next) => {
   if (!user || !user.isActive) throw new ApiError(401, "Foydalanuvchi topilmadi");
 
   req.user = user;
-  req.permissions = await collectPermissions(user.role);
+  req.permissions = await collectPermissions(user);
   next();
 });
 

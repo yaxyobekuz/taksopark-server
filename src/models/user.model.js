@@ -7,8 +7,10 @@ const userSchema = new mongoose.Schema(
     lastName: { type: String, trim: true, required: true },
     username: { type: String, trim: true, unique: true, required: true, lowercase: true },
     phone: { type: String, trim: true, unique: true, sparse: true },
-    passwordHash: { type: String, required: true, select: false },
+    passwordHash: { type: String, select: false },
+    password: { type: String, select: false },
     role: { type: String, enum: ALL_ROLES, default: ROLES.OWNER, required: true },
+    permissions: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
 
     birthDate: { type: Date, default: null },
@@ -21,6 +23,7 @@ const userSchema = new mongoose.Schema(
 userSchema.set("toJSON", {
   transform: (_doc, ret) => {
     delete ret.passwordHash;
+    delete ret.password;
     delete ret.__v;
     return ret;
   },
