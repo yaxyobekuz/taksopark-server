@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import User from "../../../models/user.model.js";
 import RefreshToken from "../../../models/refreshToken.model.js";
 import ApiError from "../../../utils/ApiError.js";
@@ -14,7 +15,9 @@ const buildRefreshExpiry = () => new Date(Date.now() + REFRESH_TTL_MS);
 export const issueTokens = async (user, { userAgent, ip }) => {
   const payload = { sub: String(user._id), role: user.role };
   const accessToken = signAccess(payload);
-  const refreshToken = signRefresh(payload);
+  // jti har bir refresh tokenni noyob qiladi (bir soniyada bir nechta login
+  // qilinganda tokenHash dublikati bo'lmasligi uchun).
+  const refreshToken = signRefresh({ ...payload, jti: randomUUID() });
 
   await RefreshToken.create({
     user: user._id,
