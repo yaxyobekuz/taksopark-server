@@ -8,7 +8,7 @@ import Car from "../../../models/car.model.js";
 import Transaction, { TRANSACTION_TYPES } from "../../../models/transaction.model.js";
 import { startOfDayTashkent, endOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
-import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
+import { TARIFFS } from "../../../constants/tariffs.js";
 
 export const dailyPlanTotal = async ({ date }) => {
   const target = startOfDayTashkent(date || new Date());
@@ -17,7 +17,7 @@ export const dailyPlanTotal = async ({ date }) => {
     status: "active",
     car: { $ne: null },
   })
-    .populate("car", "plateNumber model")
+    .populate("car", "plateNumber model dailyPaymentDeposit dailyPaymentNoDeposit monthlyCashback")
     .lean();
 
   const paidRows = await DailyPayment.aggregate([
@@ -29,8 +29,9 @@ export const dailyPlanTotal = async ({ date }) => {
   const perCar = drivers
     .filter((d) => d.car)
     .map((d) => {
-      const phase = getActiveTariffPhase(d, target);
-      const expected = phase.phase === "salary" ? 0 : phase.dailyPlan;
+      // Endi har ikki tarif (har faza) kunlik to'lov qiladi.
+      const phase = getActiveTariffPhase(d, d.car, target);
+      const expected = phase.dailyPlan;
       return {
         carId: String(d.car._id),
         plateNumber: d.car.plateNumber,
@@ -336,8 +337,6 @@ export const depositDriversMonthly = async ({ year, month, driverId }) => {
   const from = startOfDayTashkent(`${year}-${pad(month)}-01`);
   const to = endOfDayTashkent(`${year}-${pad(month)}-${pad(lastDay)}`);
 
-  const expectedPerDriver = lastDay * TARIFF_CONFIG[TARIFFS.DEPOSIT].dailyPlan;
-
   const driverFilter = {
     tariff: TARIFFS.DEPOSIT,
     status: DRIVER_STATUS.ACTIVE,
@@ -345,7 +344,7 @@ export const depositDriversMonthly = async ({ year, month, driverId }) => {
   if (driverId) driverFilter._id = oid(driverId);
 
   const drivers = await Driver.find(driverFilter)
-    .populate("car", "plateNumber model")
+    .populate("car", "plateNumber model dailyPaymentDeposit")
     .lean();
 
   const paidMatch = {
@@ -362,12 +361,12 @@ export const depositDriversMonthly = async ({ year, month, driverId }) => {
 
   const rows = drivers
     .map((d) => {
+      const dailyPlan = d.car?.dailyPaymentDeposit || 0;
+      const expected = lastDay * dailyPlan;
       const paid = paidByDriver.get(String(d._id)) || 0;
-      const debt = Math.max(0, expectedPerDriver - paid);
+      const debt = Math.max(0, expected - paid);
       const percent =
-        expectedPerDriver > 0
-          ? Math.min(100, Math.round((paid / expectedPerDriver) * 100))
-          : 0;
+        expected > 0 ? Math.min(100, Math.round((paid / expected) * 100)) : 0;
       return {
         driverId: String(d._id),
         firstName: d.firstName,
@@ -376,7 +375,7 @@ export const depositDriversMonthly = async ({ year, month, driverId }) => {
         car: d.car
           ? { _id: String(d.car._id), plateNumber: d.car.plateNumber, model: d.car.model }
           : null,
-        expected: expectedPerDriver,
+        expected,
         paid,
         debt,
         percent,

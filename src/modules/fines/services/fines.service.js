@@ -43,7 +43,10 @@ export const create = async (body, attachments, currentUser) => {
   if (!attachments || attachments.length === 0) {
     throw new ApiError(400, "Jarima uchun rasm yoki hujjat majburiy");
   }
-  const driver = await Driver.findById(body.driverId);
+  const driver = await Driver.findById(body.driverId).populate(
+    "car",
+    "dailyPaymentDeposit dailyPaymentNoDeposit monthlyCashback",
+  );
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
   if (driver.status === DRIVER_STATUS.ARCHIVED) {
     throw new ApiError(409, "Haydovchi arxivlangan");
@@ -51,7 +54,7 @@ export const create = async (body, attachments, currentUser) => {
   if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
 
   const issueDate = startOfDayTashkent(body.issueDate);
-  const phase = getActiveTariffPhase(driver, issueDate);
+  const phase = getActiveTariffPhase(driver, driver.car, issueDate);
 
   // Sinov paytida oylikga bog'lanmaydi. Salary fazada jarima sanasidagi oylikga link.
   let oylikId = null;

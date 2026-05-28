@@ -1,5 +1,6 @@
 import Oylik from "../../../models/oylik.model.js";
 import Driver from "../../../models/driver.model.js";
+import Car from "../../../models/car.model.js";
 import DailyPayment from "../../../models/dailyPayment.model.js";
 import Fine from "../../../models/fine.model.js";
 import Damage from "../../../models/damage.model.js";
@@ -8,7 +9,6 @@ import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
 import { GRACE_DAYS } from "../../../constants/oyliklar.js";
 import { startOfDayTashkent, addDays, addMonths, endOfDayTashkent } from "../../../utils/timezone.js";
-import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
 
 // Bir oylik davrining tugash/muddat sanalarini boshlanish sanasidan hisoblaydi.
 const computeOylikWindow = (startDate) => {
@@ -24,6 +24,14 @@ const salaryStartDate = (driver) => {
   const cfg = TARIFF_CONFIG[TARIFFS.NO_DEPOSIT];
   if (driver.trialEndedAt) return startOfDayTashkent(driver.trialEndedAt);
   return startOfDayTashkent(addDays(driver.startDate, cfg.trialDays));
+};
+
+// Haydovchining mashinasidagi oylik cashback narxini oladi.
+const monthlyCashbackOf = async (driver) => {
+  const carId = driver.car?._id || driver.car;
+  const car = await Car.findById(carId).select("monthlyCashback");
+  if (!car) throw new ApiError(409, "Mashina topilmadi");
+  return car.monthlyCashback;
 };
 
 // Salary fazasi boshidan asOf sanasigacha barcha yetishmagan oyliklarni yaratadi.
@@ -42,22 +50,36 @@ export const ensureOyliklar = async (driver, asOf = new Date()) => {
     startDate = startOfDayTashkent(addDays(existing[count - 1].endDate, 1));
   }
 
-  const cfg = TARIFF_CONFIG[TARIFFS.NO_DEPOSIT];
+  if (startDate > ref) return;
+  const cashback = await monthlyCashbackOf(driver);
+  const carId = driver.car?._id || driver.car;
   while (startDate <= ref) {
     const win = computeOylikWindow(startDate);
     await Oylik.create({
       driver: driver._id,
-      car: driver.car,
+      car: carId,
       oylikNumber: count + 1,
       startDate: win.startDate,
       endDate: win.endDate,
       dueDate: win.dueDate,
       expectedPlanTotal: 0,
-      salary: cfg.monthlySalary,
+      salary: cashback,
     });
     count += 1;
     startDate = startOfDayTashkent(addDays(win.endDate, 1));
   }
+};
+
+// O'tish (no_deposit -> deposit) uchun: barcha oyliklardan jami ishlangan,
+// hali to'lanmagan cashback qoldig'ini hisoblaydi.
+export const computeEarnedRemainder = async (driver) => {
+  await ensureOyliklar(driver, new Date());
+  const oyliklar = await Oylik.find({ driver: driver._id });
+  let remainder = 0;
+  for (const o of oyliklar) {
+    remainder += earnedPayoutOf(o) - o.paidOut;
+  }
+  return Math.max(0, remainder);
 };
 
 // Sinov tugash sanasi o'zgarganda 1-oylik sanalarini moslaydi.
@@ -184,9 +206,10 @@ export const addPayout = async (id, body, currentUser) => {
     throw new ApiError(400, "To'lov summasi noto'g'ri");
   }
 
-  const remaining = Math.max(0, earnedPayoutOf(oylik) - oylik.paidOut);
+  // Avans to'liq oylik cashback summasigacha olinishi mumkin (mijoz qoidasi).
+  const remaining = Math.max(0, oylik.salary - oylik.paidOut);
   if (body.amount > remaining) {
-    throw new ApiError(400, `Hisoblangan haqdan oshib ketdi. Qoldi: ${remaining}`);
+    throw new ApiError(400, `Oylik cashback summasidan oshib ketdi. Qoldi: ${remaining}`);
   }
 
   const paidAt = body.paidAt ? new Date(body.paidAt) : new Date();
@@ -224,9 +247,9 @@ export const updatePayout = async (oylikId, payoutId, body) => {
   if (body.amount !== undefined) {
     if (body.amount <= 0) throw new ApiError(400, "To'lov summasi noto'g'ri");
     const otherPaid = oylik.paidOut - payout.amount;
-    const remaining = Math.max(0, earnedPayoutOf(oylik) - otherPaid);
+    const remaining = Math.max(0, oylik.salary - otherPaid);
     if (body.amount > remaining) {
-      throw new ApiError(400, `Hisoblangan haqdan oshib ketdi. Qoldi: ${remaining}`);
+      throw new ApiError(400, `Oylik cashback summasidan oshib ketdi. Qoldi: ${remaining}`);
     }
     oylik.paidOut = otherPaid + body.amount;
     payout.amount = body.amount;

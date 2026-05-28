@@ -7,9 +7,24 @@ import { TARIFFS } from "../../../constants/tariffs.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
 
+// Depozit deltasi: deficit ushlanganda manfiy, ortiqcha to'lovda musbat.
+// Manfiy delta depozitni kamaytiradi, 0 dan oshsa qarzga yoziladi.
+// Musbat delta avval mavjud qarzni qoplaydi, qolgani depozitga qo'shiladi.
 const applyDepositDelta = async (driver, delta) => {
   if (driver.tariff !== TARIFFS.DEPOSIT) return;
-  driver.depositRemaining = Math.max(0, driver.depositRemaining + delta);
+  if (delta < 0) {
+    const raw = driver.depositRemaining + delta;
+    if (raw < 0) {
+      driver.totalDebt += -raw;
+      driver.depositRemaining = 0;
+    } else {
+      driver.depositRemaining = raw;
+    }
+  } else {
+    const debtPayoff = Math.min(driver.totalDebt, delta);
+    driver.totalDebt -= debtPayoff;
+    driver.depositRemaining += delta - debtPayoff;
+  }
   await driver.save();
 };
 
@@ -17,8 +32,6 @@ const applyOylikDelta = async (oylikId, paidDelta) => {
   if (!oylikId) return;
   await Oylik.updateOne({ _id: oylikId }, { $inc: { paidTotal: paidDelta } });
 };
-
-const depositDeficit = (expected, paid) => Math.max(0, expected - paid);
 
 // Kunlik to'lov o'zgarganda mos Transaction yozuvini moslaydi.
 const syncPaymentTransaction = async (payment, currentUser) => {
@@ -67,7 +80,10 @@ export const list = async ({ driverId, carId, fromDate, toDate, page = 1, limit 
 };
 
 export const create = async (body, currentUser) => {
-  const driver = await Driver.findById(body.driverId);
+  const driver = await Driver.findById(body.driverId).populate(
+    "car",
+    "dailyPaymentDeposit dailyPaymentNoDeposit monthlyCashback",
+  );
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
   if (driver.status !== DRIVER_STATUS.ACTIVE) {
     throw new ApiError(409, "Haydovchi faol emas");
@@ -75,25 +91,30 @@ export const create = async (body, currentUser) => {
   if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
 
   const date = startOfDayTashkent(body.date);
-  const phase = getActiveTariffPhase(driver, date);
+  const phase = getActiveTariffPhase(driver, driver.car, date);
+  const carId = driver.car._id;
 
+  // Depozitsiz haydovchining kunlik to'lovi joriy oylik davriga bog'lanadi.
+  let oylikId = null;
   if (driver.tariff === TARIFFS.NO_DEPOSIT && phase.phase === "salary") {
-    throw new ApiError(
-      409,
-      "Oylik fazasidagi haydovchi kunlik to'lov qilmaydi. Kompaniya unga oylik beradi.",
+    const { oylikForDate, ensureOyliklar } = await import(
+      "../../oyliklar/services/oyliklar.service.js"
     );
+    await ensureOyliklar(driver, date);
+    const oylik = await oylikForDate(driver._id, date);
+    oylikId = oylik?._id || null;
   }
 
   let payment;
   try {
     payment = await DailyPayment.create({
       driver: driver._id,
-      car: driver.car,
+      car: carId,
       date,
       amount: body.amount,
       expectedPlan: phase.dailyPlan,
       tariffSnapshot: driver.tariff,
-      oylik: null,
+      oylik: oylikId,
       note: body.note || "",
       createdBy: currentUser._id,
     });
@@ -104,8 +125,14 @@ export const create = async (body, currentUser) => {
     throw e;
   }
 
-  const deficit = depositDeficit(phase.dailyPlan, body.amount);
-  if (deficit > 0) await applyDepositDelta(driver, -deficit);
+  // Depozitli: ortiqcha to'lov depozitga, kam to'lov depozitdan/qarzga.
+  if (driver.tariff === TARIFFS.DEPOSIT) {
+    const delta = body.amount - phase.dailyPlan;
+    if (delta !== 0) await applyDepositDelta(driver, delta);
+  }
+
+  // Depozitsiz: kunlik to'lov oylik paidTotal'ga qo'shiladi (deficit cashbackdan ushlanadi).
+  if (oylikId) await applyOylikDelta(oylikId, body.amount);
 
   if (body.amount > 0) {
     await Transaction.create({
@@ -131,12 +158,10 @@ export const update = async (id, body, currentUser) => {
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
 
   if (body.amount !== undefined && body.amount !== payment.amount) {
-    const oldDeficit = depositDeficit(payment.expectedPlan, payment.amount);
-    const newDeficit = depositDeficit(payment.expectedPlan, body.amount);
-    const deltaDeposit = oldDeficit - newDeficit;
-    if (deltaDeposit !== 0) await applyDepositDelta(driver, deltaDeposit);
     const deltaPaid = body.amount - payment.amount;
-    if (deltaPaid !== 0) await applyOylikDelta(payment.oylik, deltaPaid);
+    // Depozitli: summa o'zgarishi to'g'ridan-to'g'ri depozitga ta'sir qiladi.
+    if (driver.tariff === TARIFFS.DEPOSIT) await applyDepositDelta(driver, deltaPaid);
+    if (payment.oylik) await applyOylikDelta(payment.oylik, deltaPaid);
     payment.amount = body.amount;
   }
   if (body.note !== undefined) payment.note = body.note;
@@ -149,9 +174,9 @@ export const remove = async (id) => {
   const payment = await DailyPayment.findById(id);
   if (!payment) throw new ApiError(404, "To'lov topilmadi");
   const driver = await Driver.findById(payment.driver);
-  if (driver) {
-    const oldDeficit = depositDeficit(payment.expectedPlan, payment.amount);
-    if (oldDeficit > 0) await applyDepositDelta(driver, oldDeficit);
+  // To'lov o'chirilsa, uning depozitga qo'shgan/ushlagan ta'siri bekor qilinadi.
+  if (driver && driver.tariff === TARIFFS.DEPOSIT) {
+    await applyDepositDelta(driver, -payment.amount);
   }
   if (payment.oylik) await applyOylikDelta(payment.oylik, -payment.amount);
   await Transaction.deleteMany({ dailyPayment: payment._id });
