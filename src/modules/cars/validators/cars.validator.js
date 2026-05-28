@@ -38,10 +38,15 @@ export const listExpiringSchema = z.object({
   }),
 });
 
+const priceField = z.coerce.number().min(0, "Narx 0 dan kam bo'lmasligi kerak");
+
 export const createSchema = z.object({
   body: z.object({
     plateNumber: z.string().trim().optional(),
     model: z.string().trim().min(1, "Model kerak"),
+    dailyPaymentDeposit: priceField,
+    dailyPaymentNoDeposit: priceField,
+    monthlyCashback: priceField,
     notes: z.string().optional(),
   }),
 });
@@ -51,6 +56,9 @@ export const updateSchema = z.object({
   body: z.object({
     plateNumber: z.string().trim().optional(),
     model: z.string().trim().min(1).optional(),
+    dailyPaymentDeposit: priceField.optional(),
+    dailyPaymentNoDeposit: priceField.optional(),
+    monthlyCashback: priceField.optional(),
     notes: z.string().optional(),
     isActive: boolFlag,
   }),

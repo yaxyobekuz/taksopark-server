@@ -47,6 +47,9 @@ export const create = async (body) => {
   return Car.create({
     plateNumber: plate,
     model: body.model,
+    dailyPaymentDeposit: body.dailyPaymentDeposit,
+    dailyPaymentNoDeposit: body.dailyPaymentNoDeposit,
+    monthlyCashback: body.monthlyCashback,
     notes: body.notes || "",
     photoUrl: body.photoUrl || "",
   });
@@ -67,6 +70,9 @@ export const update = async (id, body) => {
     car.plateNumber = plate;
   }
   if (body.model !== undefined) car.model = body.model;
+  if (body.dailyPaymentDeposit !== undefined) car.dailyPaymentDeposit = body.dailyPaymentDeposit;
+  if (body.dailyPaymentNoDeposit !== undefined) car.dailyPaymentNoDeposit = body.dailyPaymentNoDeposit;
+  if (body.monthlyCashback !== undefined) car.monthlyCashback = body.monthlyCashback;
   if (body.notes !== undefined) car.notes = body.notes;
   if (body.isActive !== undefined) car.isActive = body.isActive;
 
