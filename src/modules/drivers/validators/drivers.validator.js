@@ -28,7 +28,24 @@ export const createSchema = z.object({
     tariff: z.enum(ALL_TARIFFS),
     carId: objectId.nullable().optional(),
     startDate: z.string().refine((s) => !Number.isNaN(new Date(s).getTime()), "Sana noto'g'ri"),
+    depositInitial: z.coerce.number().min(0).optional(),
     notes: z.string().optional(),
+  }),
+});
+
+export const changeTariffSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    tariff: z.enum(ALL_TARIFFS),
+    note: z.string().optional(),
+  }),
+});
+
+export const adjustDepositSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    delta: z.coerce.number().refine((n) => n !== 0, "Summa 0 bo'lishi mumkin emas"),
+    note: z.string().optional(),
   }),
 });
 

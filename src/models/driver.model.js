@@ -25,6 +25,19 @@ const driverDocumentSchema = new mongoose.Schema(
   { _id: true, timestamps: true },
 );
 
+const tariffHistorySchema = new mongoose.Schema(
+  {
+    from: { type: String, enum: ALL_TARIFFS, required: true },
+    to: { type: String, enum: ALL_TARIFFS, required: true },
+    at: { type: Date, required: true, default: Date.now },
+    depositReturned: { type: Number, default: 0 },
+    cashbackToDeposit: { type: Number, default: 0 },
+    debtCarried: { type: Number, default: 0 },
+    note: { type: String, default: "" },
+  },
+  { _id: true, timestamps: false },
+);
+
 const driverSchema = new mongoose.Schema(
   {
     firstName: { type: String, trim: true, required: true },
@@ -43,6 +56,9 @@ const driverSchema = new mongoose.Schema(
 
     depositInitial: { type: Number, default: 0, min: 0 },
     depositRemaining: { type: Number, default: 0, index: true },
+
+    totalDebt: { type: Number, default: 0, min: 0, index: true },
+    tariffHistory: { type: [tariffHistorySchema], default: [] },
 
     status: {
       type: String,

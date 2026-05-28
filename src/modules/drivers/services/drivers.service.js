@@ -4,30 +4,47 @@ import DailyPayment from "../../../models/dailyPayment.model.js";
 import Oylik from "../../../models/oylik.model.js";
 import DriverDocumentType from "../../../models/driverDocumentType.model.js";
 import ApiError from "../../../utils/ApiError.js";
-import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
+import { TARIFFS, ALL_TARIFFS, TARIFF_CONFIG, DEPOSIT_WARN_THRESHOLD } from "../../../constants/tariffs.js";
+import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
 import { startOfDayTashkent, daysBetween, addDays } from "../../../utils/timezone.js";
 import { removeFileByUrl, fileToPublicUrl } from "../../../utils/fileStorage.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export const getActiveTariffPhase = (driver, asOf = new Date()) => {
+// Mashinadan tarifga mos narxni oladi (kunlik to'lov + cashback). car populate
+// qilingan obyekt yoki alohida uzatilishi mumkin.
+const resolveCarPricing = (driver, car) => {
+  const c = car || driver.car;
+  if (!c || typeof c !== "object" || c.dailyPaymentDeposit === undefined) {
+    throw new ApiError(409, "Mashina narxlari aniqlanmagan. Mashina biriktiring");
+  }
+  return {
+    dailyPlan:
+      driver.tariff === TARIFFS.DEPOSIT ? c.dailyPaymentDeposit : c.dailyPaymentNoDeposit,
+    cashback: c.monthlyCashback,
+  };
+};
+
+export const getActiveTariffPhase = (driver, car, asOf = new Date()) => {
   const cfg = TARIFF_CONFIG[driver.tariff];
+  const pricing = resolveCarPricing(driver, car);
+
   if (driver.tariff === TARIFFS.DEPOSIT) {
-    return { phase: "deposit", dailyPlan: cfg.dailyPlan };
+    return { phase: "deposit", dailyPlan: pricing.dailyPlan };
   }
   const ref = startOfDayTashkent(asOf);
 
   // Qo'lda tugatilgan sinov
   if (driver.trialEndedAt && ref >= startOfDayTashkent(driver.trialEndedAt)) {
-    return { phase: "salary", dailyPlan: cfg.dailyPlan };
+    return { phase: "salary", dailyPlan: pricing.dailyPlan, cashback: pricing.cashback };
   }
 
-  // Avtomatik (startDate + trialDays)
+  // Avtomatik (startDate + trialDays) - sinovda cashback yo'q
   const diff = daysBetween(driver.startDate, ref);
   if (diff < cfg.trialDays) {
-    return { phase: "trial", dailyPlan: cfg.dailyPlan, trialDaysLeft: cfg.trialDays - diff };
+    return { phase: "trial", dailyPlan: pricing.dailyPlan, trialDaysLeft: cfg.trialDays - diff };
   }
-  return { phase: "salary", dailyPlan: cfg.dailyPlan };
+  return { phase: "salary", dailyPlan: pricing.dailyPlan, cashback: pricing.cashback };
 };
 
 export const endTrial = async (id, endDateInput) => {
@@ -127,15 +144,16 @@ export const create = async (body) => {
   }
   const exists = await Driver.findOne({ phone: body.phone });
   if (exists) throw new ApiError(409, "Bu telefon raqamli haydovchi mavjud");
-  const cfg = TARIFF_CONFIG[body.tariff];
+  const depositInitial =
+    body.tariff === TARIFFS.DEPOSIT ? Number(body.depositInitial || 0) : 0;
   const driver = new Driver({
     firstName: body.firstName,
     lastName: body.lastName,
     phone: body.phone,
     tariff: body.tariff,
     startDate: startOfDayTashkent(body.startDate),
-    depositInitial: cfg.depositInitial,
-    depositRemaining: cfg.depositInitial,
+    depositInitial,
+    depositRemaining: depositInitial,
     notes: body.notes || "",
     photoUrl: body.photoUrl || "",
   });
@@ -188,18 +206,122 @@ export const softRemove = async (id) => {
   return driver;
 };
 
-export const getBalance = async (id) => {
-  const driver = await Driver.findById(id).populate("car", "plateNumber model");
+// Depozitni qo'shish (topup) yoki qaytarib olish (withdraw). delta musbat=qo'shish.
+export const adjustDeposit = async (id, body, currentUser) => {
+  const driver = await Driver.findById(id);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  const phase = getActiveTariffPhase(driver);
-  const result = { driver, phase, tariff: driver.tariff, warnings: [] };
+  if (driver.tariff !== TARIFFS.DEPOSIT) {
+    throw new ApiError(409, "Depozit faqat depozitli tarifda mavjud");
+  }
+  const delta = Number(body.delta);
+  if (!delta || Number.isNaN(delta)) throw new ApiError(400, "Summa noto'g'ri");
+  if (delta < 0 && driver.depositRemaining + delta < 0) {
+    throw new ApiError(400, `Depozitda yetarli mablag' yo'q. Qoldi: ${driver.depositRemaining}`);
+  }
+
+  driver.depositRemaining += delta;
+  driver.depositInitial = Math.max(driver.depositInitial, driver.depositRemaining);
+  await driver.save();
+
+  await Transaction.create({
+    type: delta > 0 ? TRANSACTION_TYPES.INCOME : TRANSACTION_TYPES.EXPENSE,
+    source: delta > 0 ? TRANSACTION_SOURCES.DEPOSIT_TOPUP : TRANSACTION_SOURCES.DEPOSIT_WITHDRAW,
+    amount: Math.abs(delta),
+    date: new Date(),
+    driver: driver._id,
+    note: body.note || "",
+    createdBy: currentUser._id,
+  });
+
+  return driver;
+};
+
+// Tarifni o'zgartirish: moliyani mijoz qoidalariga ko'ra ko'chiradi.
+export const changeTariff = async (id, body, currentUser) => {
+  const driver = await Driver.findById(id);
+  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
+  if (driver.status !== DRIVER_STATUS.ACTIVE) throw new ApiError(409, "Haydovchi faol emas");
+  const target = body.tariff;
+  if (!ALL_TARIFFS.includes(target)) throw new ApiError(400, "Tarif noto'g'ri");
+  if (target === driver.tariff) throw new ApiError(400, "Haydovchi allaqachon shu tarifda");
+  if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
+
+  const now = startOfDayTashkent(new Date());
+  const { computeEarnedRemainder } = await import("../../oyliklar/services/oyliklar.service.js");
+  const historyEntry = {
+    from: driver.tariff,
+    to: target,
+    at: now,
+    depositReturned: 0,
+    cashbackToDeposit: 0,
+    debtCarried: driver.totalDebt,
+    note: body.note || "",
+  };
+
+  if (driver.tariff === TARIFFS.NO_DEPOSIT && target === TARIFFS.DEPOSIT) {
+    // Ishlangan (hisoblangan, hali to'lanmagan) cashback depozitga qo'shiladi.
+    const earned = await computeEarnedRemainder(driver);
+    driver.depositRemaining += earned;
+    driver.depositInitial = Math.max(driver.depositInitial, driver.depositRemaining);
+    driver.tariff = TARIFFS.DEPOSIT;
+    historyEntry.cashbackToDeposit = earned;
+  } else {
+    // deposit -> no_deposit: depozit qaytariladi, cashback darhol boshlanadi (sinovsiz).
+    const refund = driver.depositRemaining;
+    if (refund > 0) {
+      await Transaction.create({
+        type: TRANSACTION_TYPES.EXPENSE,
+        source: TRANSACTION_SOURCES.DEPOSIT_REFUND,
+        amount: refund,
+        date: new Date(),
+        driver: driver._id,
+        note: body.note || "Tarif o'zgarishi: depozit qaytarildi",
+        createdBy: currentUser._id,
+      });
+    }
+    driver.depositRemaining = 0;
+    driver.depositInitial = 0;
+    driver.tariff = TARIFFS.NO_DEPOSIT;
+    // Sinovsiz: o'tish sanasidan cashback fazasi boshlanadi.
+    driver.startDate = now;
+    driver.trialEndedAt = now;
+    historyEntry.depositReturned = refund;
+  }
+
+  driver.tariffHistory.push(historyEntry);
+  await driver.save();
+
+  // Yangi depozitsiz tarif uchun oyliklarni yaratamiz.
+  if (driver.tariff === TARIFFS.NO_DEPOSIT) {
+    const { ensureOyliklar } = await import("../../oyliklar/services/oyliklar.service.js");
+    await ensureOyliklar(driver, new Date());
+  }
+
+  return driver;
+};
+
+export const getBalance = async (id) => {
+  const driver = await Driver.findById(id).populate(
+    "car",
+    "plateNumber model dailyPaymentDeposit dailyPaymentNoDeposit monthlyCashback",
+  );
+  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
+  if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
+  const phase = getActiveTariffPhase(driver, driver.car);
+  const result = {
+    driver,
+    phase,
+    tariff: driver.tariff,
+    totalDebt: driver.totalDebt,
+    warnings: [],
+  };
 
   if (driver.tariff === TARIFFS.DEPOSIT) {
     result.deposit = {
       initial: driver.depositInitial,
       remaining: driver.depositRemaining,
     };
-    const threshold = TARIFF_CONFIG[TARIFFS.DEPOSIT].depositWarnThreshold;
+    const threshold = DEPOSIT_WARN_THRESHOLD;
     if (driver.depositRemaining <= 0) result.warnings.push({ code: "deposit_empty" });
     else if (driver.depositRemaining < threshold) {
       result.warnings.push({ code: "deposit_low", threshold });
@@ -250,7 +372,7 @@ export const getBalance = async (id) => {
 };
 
 export const warnings = async () => {
-  const threshold = TARIFF_CONFIG[TARIFFS.DEPOSIT].depositWarnThreshold;
+  const threshold = DEPOSIT_WARN_THRESHOLD;
   const today = startOfDayTashkent(new Date());
 
   const depositLow = await Driver.find({
