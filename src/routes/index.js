@@ -14,6 +14,7 @@ import reportsRouter from "../modules/reports/reports.routes.js";
 import finePaymentsRouter from "../modules/finePayments/finePayments.routes.js";
 import damagePaymentsRouter from "../modules/damagePayments/damagePayments.routes.js";
 import transactionsRouter from "../modules/transactions/transactions.routes.js";
+import transactionCategoriesRouter from "../modules/transactionCategories/transactionCategories.routes.js";
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use("/reports", reportsRouter);
 router.use("/fine-payments", finePaymentsRouter);
 router.use("/damage-payments", damagePaymentsRouter);
 router.use("/transactions", transactionsRouter);
+router.use("/transaction-categories", transactionCategoriesRouter);
 
 export default router;

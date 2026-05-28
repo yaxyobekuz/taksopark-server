@@ -4,6 +4,7 @@ import Permission from "../models/permission.model.js";
 import Role from "../models/role.model.js";
 import CarDocumentType from "../models/carDocumentType.model.js";
 import DriverDocumentType from "../models/driverDocumentType.model.js";
+import TransactionCategory from "../models/transactionCategory.model.js";
 import { PERMISSIONS, PERMISSION_LABELS } from "../constants/permissions.js";
 import { ALL_ROLES } from "../constants/roles.js";
 import logger from "../config/logger.js";
@@ -62,6 +63,22 @@ const seed = async () => {
     );
   }
   logger.info(`Default haydovchi hujjat turlari: ${defaultDriverDocTypes.length}`);
+
+  const defaultTxCategories = [
+    { name: "Boshqa daromad", type: "income" },
+    { name: "Yoqilg'i", type: "expense" },
+    { name: "Ta'mirlash", type: "expense" },
+    { name: "Sug'urta", type: "expense" },
+    { name: "Boshqa xarajat", type: "expense" },
+  ];
+  for (const { name, type } of defaultTxCategories) {
+    await TransactionCategory.findOneAndUpdate(
+      { name, type },
+      { $setOnInsert: { name, type } },
+      { upsert: true, new: true },
+    );
+  }
+  logger.info(`Default tranzaksiya kategoriyalari: ${defaultTxCategories.length}`);
 
   await disconnectDB();
 };
