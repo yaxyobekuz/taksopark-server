@@ -21,7 +21,12 @@ app.set("trust proxy", 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(
   cors({
-    origin: env.CLIENT_URL,
+    origin(origin, callback) {
+      if (!origin || env.CLIENT_URLS.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS ruxsat berilmagan manba"));
+    },
     credentials: true,
   }),
 );

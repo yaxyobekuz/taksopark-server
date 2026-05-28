@@ -20,7 +20,10 @@ const env = Object.freeze({
   COOKIE_SECRET: need("COOKIE_SECRET"),
   COOKIE_DOMAIN: process.env.COOKIE_DOMAIN || "localhost",
 
-  CLIENT_URL: process.env.CLIENT_URL || "http://localhost:5173",
+  CLIENT_URLS: (process.env.CLIENT_URL || "http://localhost:5173")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean),
 });
 
 export const isProd = env.NODE_ENV === "production";
