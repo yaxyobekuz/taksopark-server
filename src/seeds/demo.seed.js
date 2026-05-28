@@ -10,7 +10,7 @@ import FinePayment, { PAYMENT_SOURCES } from "../models/finePayment.model.js";
 import DamagePayment from "../models/damagePayment.model.js";
 import Oylik from "../models/oylik.model.js";
 import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../models/transaction.model.js";
-import { TARIFFS, TARIFF_CONFIG } from "../constants/tariffs.js";
+import { TARIFFS } from "../constants/tariffs.js";
 import { startOfDayTashkent, addDays } from "../utils/timezone.js";
 import logger from "../config/logger.js";
 
@@ -34,19 +34,22 @@ const seed = async () => {
   const owner = await User.findOne({ username: "owner" });
   if (!owner) throw new Error("Owner user yo'q. Avval npm run seed:owner");
 
+  // Narx endi mashinada saqlanadi.
+  const pricing = { dailyPaymentDeposit: 500_000, dailyPaymentNoDeposit: 560_000, monthlyCashback: 5_500_000 };
+
   // 4 ta mashina
   const cars = await Car.insertMany([
-    { plateNumber: "01A111AA", model: "Cobalt", notes: "Oq, 2022" },
-    { plateNumber: "01A222BB", model: "Spark", notes: "Qora, 2021" },
-    { plateNumber: "01A333CC", model: "Nexia 3", notes: "Kumush, 2020" },
-    { plateNumber: "01A444DD", model: "Lacetti", notes: "Oq, 2019" },
+    { plateNumber: "01A111AA", model: "Cobalt", notes: "Oq, 2022", ...pricing },
+    { plateNumber: "01A222BB", model: "Spark", notes: "Qora, 2021", ...pricing },
+    { plateNumber: "01A333CC", model: "Nexia 3", notes: "Kumush, 2020", ...pricing },
+    { plateNumber: "01A444DD", model: "Lacetti", notes: "Oq, 2019", ...pricing },
   ]);
   logger.info(`Cars: ${cars.length}`);
 
   const today = startOfDayTashkent(new Date());
   const daysAgo = (n) => addDays(today, -n);
 
-  const depCfg = TARIFF_CONFIG[TARIFFS.DEPOSIT];
+  const DEPOSIT_INITIAL = 2_500_000;
 
   // 4 ta haydovchi
   const drivers = await Driver.insertMany([
@@ -57,7 +60,7 @@ const seed = async () => {
       tariff: TARIFFS.DEPOSIT,
       car: cars[0]._id,
       startDate: daysAgo(10),
-      depositInitial: depCfg.depositInitial,
+      depositInitial: DEPOSIT_INITIAL,
       depositRemaining: 2_300_000,
       status: DRIVER_STATUS.ACTIVE,
       notes: "Tajribali",
@@ -69,7 +72,7 @@ const seed = async () => {
       tariff: TARIFFS.DEPOSIT,
       car: cars[1]._id,
       startDate: daysAgo(3),
-      depositInitial: depCfg.depositInitial,
+      depositInitial: DEPOSIT_INITIAL,
       depositRemaining: 2_500_000,
       status: DRIVER_STATUS.ACTIVE,
       notes: "Yangi",
@@ -93,7 +96,7 @@ const seed = async () => {
       tariff: TARIFFS.DEPOSIT,
       car: cars[3]._id,
       startDate: daysAgo(30),
-      depositInitial: depCfg.depositInitial,
+      depositInitial: DEPOSIT_INITIAL,
       depositRemaining: 480_000,
       status: DRIVER_STATUS.ACTIVE,
       notes: "Depozit kam qoldi",
