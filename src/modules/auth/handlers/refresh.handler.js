@@ -13,7 +13,7 @@ const refresh = asyncHandler(async (req, res) => {
     ip: req.ip,
   });
 
-  setRefreshCookie(res, refreshToken);
+  setRefreshCookie(req, res, refreshToken);
   res.json({ success: true, data: { accessToken, user } });
 });
 

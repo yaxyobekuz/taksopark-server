@@ -8,7 +8,7 @@ import {
 const logout = asyncHandler(async (req, res) => {
   const rawRefresh = getRefreshFromCookies(req);
   await authService.logout({ rawRefresh });
-  clearRefreshCookie(res);
+  clearRefreshCookie(req, res);
   res.json({ success: true, message: "Tizimdan chiqdingiz" });
 });
 
