@@ -289,6 +289,46 @@ export const dailyIncomeExpense = async ({ days = 30 }) => {
   return { days, items };
 };
 
+// Tanlangan davr bo'yicha kategoriya kesimida kirim/chiqim.
+export const categoryMonthly = async ({ fromDate, toDate }) => {
+  const match = {};
+  if (fromDate || toDate) {
+    match.date = {};
+    if (fromDate) match.date.$gte = startOfDayTashkent(fromDate);
+    if (toDate) match.date.$lte = endOfDayTashkent(toDate);
+  }
+
+  const rows = await Transaction.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: { type: "$type", category: "$category" },
+        amount: { $sum: "$amount" },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const income = [];
+  const expense = [];
+  let totalIncome = 0;
+  let totalExpense = 0;
+  for (const r of rows) {
+    const item = { category: r._id.category || "Boshqa", amount: r.amount, count: r.count };
+    if (r._id.type === TRANSACTION_TYPES.INCOME) {
+      income.push(item);
+      totalIncome += r.amount;
+    } else {
+      expense.push(item);
+      totalExpense += r.amount;
+    }
+  }
+  income.sort((a, b) => b.amount - a.amount);
+  expense.sort((a, b) => b.amount - a.amount);
+
+  return { income, expense, totalIncome, totalExpense };
+};
+
 // Tanlangan oydagi depozitli haydovchilar progressi: kutilgan/to'langan/qarz.
 export const depositDriversMonthly = async ({ year, month, driverId }) => {
   const lastDay = new Date(year, month, 0).getDate();

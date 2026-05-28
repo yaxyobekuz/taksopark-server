@@ -8,6 +8,7 @@ import {
   financeSchema,
   depositDriversMonthlySchema,
   dailyIncomeExpenseSchema,
+  categoryMonthlySchema,
 } from "./validators/reports.validator.js";
 import dailyPlanTotal from "./handlers/dailyPlanTotal.handler.js";
 import finance from "./handlers/finance.handler.js";
@@ -15,6 +16,7 @@ import minYear from "./handlers/minYear.handler.js";
 import monthlyIncomeExpense from "./handlers/monthlyIncomeExpense.handler.js";
 import depositDriversMonthly from "./handlers/depositDriversMonthly.handler.js";
 import dailyIncomeExpense from "./handlers/dailyIncomeExpense.handler.js";
+import categoryMonthly from "./handlers/categoryMonthly.handler.js";
 
 const router = Router();
 
@@ -57,6 +59,13 @@ router.get(
   requirePermission(PERMISSIONS.REPORTS_READ),
   validate(dailyIncomeExpenseSchema),
   dailyIncomeExpense,
+);
+router.get(
+  "/category-monthly",
+  requireAuth,
+  requirePermission(PERMISSIONS.REPORTS_READ),
+  validate(categoryMonthlySchema),
+  categoryMonthly,
 );
 
 export default router;

@@ -29,3 +29,10 @@ export const dailyIncomeExpenseSchema = z.object({
     days: z.coerce.number().int().min(1).max(365).optional(),
   }),
 });
+
+export const categoryMonthlySchema = z.object({
+  query: z.object({
+    fromDate: z.string().optional(),
+    toDate: z.string().optional(),
+  }),
+});
