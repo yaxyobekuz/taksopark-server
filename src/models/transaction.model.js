@@ -14,6 +14,9 @@ export const TRANSACTION_SOURCES = Object.freeze({
   FINE_SYSTEM: "fine_system",
   DAMAGE_SYSTEM: "damage_system",
   OYLIK_PAYOUT: "oylik_payout",
+  DEPOSIT_TOPUP: "deposit_topup",
+  DEPOSIT_WITHDRAW: "deposit_withdraw",
+  DEPOSIT_REFUND: "deposit_refund",
   MANUAL: "manual",
 });
 
