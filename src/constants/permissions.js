@@ -15,6 +15,9 @@ export const PERMISSIONS = Object.freeze({
   DRIVERS_END_TRIAL: "drivers.end_trial",
   DRIVERS_DOCUMENTS_MANAGE: "drivers.documents.manage",
 
+  REST_DAYS_READ: "rest_days.read",
+  REST_DAYS_MANAGE: "rest_days.manage",
+
   CARS_READ: "cars.read",
   CARS_CREATE: "cars.create",
   CARS_UPDATE: "cars.update",
@@ -66,6 +69,9 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.DRIVERS_DELETE]: { label: "Haydovchini o'chirish", group: "drivers" },
   [PERMISSIONS.DRIVERS_END_TRIAL]: { label: "Sinov muddatini tugatish", group: "drivers" },
   [PERMISSIONS.DRIVERS_DOCUMENTS_MANAGE]: { label: "Haydovchi hujjat turlarini boshqarish", group: "drivers" },
+
+  [PERMISSIONS.REST_DAYS_READ]: { label: "Dam olish kunlarini ko'rish", group: "rest_days" },
+  [PERMISSIONS.REST_DAYS_MANAGE]: { label: "Dam olish kunlarini boshqarish", group: "rest_days" },
 
   [PERMISSIONS.CARS_READ]: { label: "Mashinalarni ko'rish", group: "cars" },
   [PERMISSIONS.CARS_CREATE]: { label: "Mashina qo'shish", group: "cars" },
