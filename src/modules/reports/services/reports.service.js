@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import DailyPayment from "../../../models/dailyPayment.model.js";
+import RestDay from "../../../models/restDay.model.js";
 import Fine from "../../../models/fine.model.js";
 import Damage from "../../../models/damage.model.js";
 import Oylik from "../../../models/oylik.model.js";
@@ -26,12 +27,17 @@ export const dailyPlanTotal = async ({ date }) => {
   ]);
   const paidByCar = new Map(paidRows.map((r) => [String(r._id), r.amount]));
 
+  // Shu kun dam olish kuni bo'lgan haydovchilardan reja kutilmaydi.
+  const restRows = await RestDay.find({ date: target }).select("driver").lean();
+  const restDriverSet = new Set(restRows.map((r) => String(r.driver)));
+
   const perCar = drivers
     .filter((d) => d.car)
     .map((d) => {
       // Endi har ikki tarif (har faza) kunlik to'lov qiladi.
       const phase = getActiveTariffPhase(d, d.car, target);
-      const expected = phase.dailyPlan;
+      const isRest = restDriverSet.has(String(d._id));
+      const expected = isRest ? 0 : phase.dailyPlan;
       return {
         carId: String(d.car._id),
         plateNumber: d.car.plateNumber,
@@ -39,6 +45,7 @@ export const dailyPlanTotal = async ({ date }) => {
         driverName: `${d.firstName} ${d.lastName}`.trim(),
         expected,
         amount: paidByCar.get(String(d.car._id)) || 0,
+        isRestDay: isRest,
       };
     })
     .sort((a, b) => (a.plateNumber || "").localeCompare(b.plateNumber || ""));
@@ -330,7 +337,8 @@ export const categoryMonthly = async ({ fromDate, toDate }) => {
   return { income, expense, totalIncome, totalExpense };
 };
 
-// Tanlangan oydagi depozitli haydovchilar progressi: kutilgan/to'langan/qarz.
+// Tanlangan oydagi haydovchilar oylik reja progressi: kutilgan/to'langan/qarz.
+// Har ikki tarif (depozitli va depozitsiz) kunlik to'lov qiladi.
 export const depositDriversMonthly = async ({ year, month, driverId }) => {
   const lastDay = new Date(year, month, 0).getDate();
   const pad = (n) => String(n).padStart(2, "0");
@@ -338,19 +346,16 @@ export const depositDriversMonthly = async ({ year, month, driverId }) => {
   const to = endOfDayTashkent(`${year}-${pad(month)}-${pad(lastDay)}`);
 
   const driverFilter = {
-    tariff: TARIFFS.DEPOSIT,
     status: DRIVER_STATUS.ACTIVE,
+    car: { $ne: null },
   };
   if (driverId) driverFilter._id = oid(driverId);
 
   const drivers = await Driver.find(driverFilter)
-    .populate("car", "plateNumber model dailyPaymentDeposit")
+    .populate("car", "plateNumber model dailyPaymentDeposit dailyPaymentNoDeposit")
     .lean();
 
-  const paidMatch = {
-    date: { $gte: from, $lte: to },
-    tariffSnapshot: TARIFFS.DEPOSIT,
-  };
+  const paidMatch = { date: { $gte: from, $lte: to } };
   if (driverId) paidMatch.driver = oid(driverId);
 
   const paidRows = await DailyPayment.aggregate([
@@ -359,10 +364,25 @@ export const depositDriversMonthly = async ({ year, month, driverId }) => {
   ]);
   const paidByDriver = new Map(paidRows.map((r) => [String(r._id), r.paid]));
 
+  // Oy ichidagi dam olish kunlari rejadan ayriladi (har haydovchi bo'yicha).
+  const restMatch = { date: { $gte: from, $lte: to } };
+  if (driverId) restMatch.driver = oid(driverId);
+  const restRows = await RestDay.aggregate([
+    { $match: restMatch },
+    { $group: { _id: "$driver", count: { $sum: 1 } } },
+  ]);
+  const restByDriver = new Map(restRows.map((r) => [String(r._id), r.count]));
+
   const rows = drivers
     .map((d) => {
-      const dailyPlan = d.car?.dailyPaymentDeposit || 0;
-      const expected = lastDay * dailyPlan;
+      // Kunlik reja narxi tarifga qarab tanlanadi.
+      const dailyPlan =
+        d.tariff === TARIFFS.DEPOSIT
+          ? d.car?.dailyPaymentDeposit || 0
+          : d.car?.dailyPaymentNoDeposit || 0;
+      const restDays = restByDriver.get(String(d._id)) || 0;
+      const workDays = Math.max(0, lastDay - restDays);
+      const expected = workDays * dailyPlan;
       const paid = paidByDriver.get(String(d._id)) || 0;
       const debt = Math.max(0, expected - paid);
       const percent =
@@ -372,6 +392,7 @@ export const depositDriversMonthly = async ({ year, month, driverId }) => {
         firstName: d.firstName,
         lastName: d.lastName,
         photoUrl: d.photoUrl || "",
+        tariff: d.tariff,
         car: d.car
           ? { _id: String(d.car._id), plateNumber: d.car.plateNumber, model: d.car.model }
           : null,
@@ -379,6 +400,8 @@ export const depositDriversMonthly = async ({ year, month, driverId }) => {
         paid,
         debt,
         percent,
+        restDays,
+        workDays,
       };
     })
     .sort((a, b) => {
