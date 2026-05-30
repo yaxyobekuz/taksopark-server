@@ -36,3 +36,9 @@ export const endOfDayTashkent = (input) => {
   const d = startOfDayTashkent(input);
   return new Date(d.getTime() + 24 * 60 * 60 * 1000 - 1);
 };
+
+// Tashkent kuni "YYYY-MM-DD" ko'rinishida (TZ-ga bog'liq emas).
+export const dateKeyTashkent = (input) => {
+  const d = input instanceof Date ? input : new Date(input);
+  return new Date(d.getTime() + TZ_OFFSET_MS).toISOString().slice(0, 10);
+};
