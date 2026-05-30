@@ -91,6 +91,13 @@ export const create = async (body, currentUser) => {
   if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
 
   const date = startOfDayTashkent(body.date);
+
+  // Dam olish kuni belgilangan bo'lsa, bu kunga to'lov qo'shib bo'lmaydi.
+  const { isRestDay } = await import("../../restdays/services/restdays.service.js");
+  if (await isRestDay(driver._id, date)) {
+    throw new ApiError(409, "Bu kun dam olish kuni. To'lov qo'shish uchun avval ish kuniga aylantiring");
+  }
+
   const phase = getActiveTariffPhase(driver, driver.car, date);
   const carId = driver.car._id;
 
