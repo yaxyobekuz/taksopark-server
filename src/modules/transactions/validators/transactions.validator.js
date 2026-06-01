@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
+import {
+  TRANSACTION_TYPES,
+  TRANSACTION_SOURCES,
+  TRANSACTION_WALLETS,
+} from "../../../models/transaction.model.js";
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, "ID noto'g'ri");
 
@@ -11,6 +15,7 @@ export const listSchema = z.object({
   query: z.object({
     type: z.enum(Object.values(TRANSACTION_TYPES)).optional(),
     source: z.enum(Object.values(TRANSACTION_SOURCES)).optional(),
+    wallet: z.enum(Object.values(TRANSACTION_WALLETS)).optional(),
     driverId: objectId.optional(),
     fromDate: z.string().optional(),
     toDate: z.string().optional(),
@@ -23,6 +28,7 @@ export const summarySchema = z.object({
   query: z.object({
     fromDate: z.string().optional(),
     toDate: z.string().optional(),
+    wallet: z.enum(Object.values(TRANSACTION_WALLETS)).optional(),
   }),
 });
 

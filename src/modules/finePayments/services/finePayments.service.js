@@ -1,10 +1,14 @@
 import Fine from "../../../models/fine.model.js";
 import FinePayment, { PAYMENT_SOURCES } from "../../../models/finePayment.model.js";
-import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
+import Transaction, {
+  TRANSACTION_DIRECTIONS,
+  TRANSACTION_SOURCES,
+  TRANSACTION_WALLETS,
+} from "../../../models/transaction.model.js";
 import Driver from "../../../models/driver.model.js";
-import Oylik from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS } from "../../../constants/tariffs.js";
+import { writeLinkedTxs } from "../../../helpers/walletTransaction.helper.js";
 
 const recomputeFineStatus = (fine) => {
   if (fine.paidAmount <= 0) fine.paymentStatus = "pending";
@@ -51,32 +55,43 @@ export const create = async (body, currentUser) => {
     createdBy: currentUser._id,
   });
 
-  let txType, txSource;
-  if (body.source === PAYMENT_SOURCES.DRIVER_CASH) {
-    txType = TRANSACTION_TYPES.INCOME;
-    txSource = TRANSACTION_SOURCES.FINE_PAYMENT_CASH;
-  } else if (body.source === PAYMENT_SOURCES.DEPOSIT) {
-    txType = TRANSACTION_TYPES.INCOME;
-    txSource = TRANSACTION_SOURCES.FINE_PAYMENT_DEPOSIT;
-  } else {
-    txType = TRANSACTION_TYPES.EXPENSE;
-    txSource = TRANSACTION_SOURCES.FINE_SYSTEM;
-  }
+  // Naqd to'lov yoki manual depozit ushlash — qarz qopladi va tashqi hamyon balanslandi.
+  const isDeposit = body.source === PAYMENT_SOURCES.DEPOSIT;
+  const txEntries = [
+    {
+      wallet: isDeposit ? TRANSACTION_WALLETS.DEPOSIT : TRANSACTION_WALLETS.DEBT,
+      direction: TRANSACTION_DIRECTIONS.OUT,
+      source: isDeposit
+        ? TRANSACTION_SOURCES.DEBT_REPAY_DEPOSIT
+        : TRANSACTION_SOURCES.DEBT_REPAY_CASH,
+      amount: body.amount,
+      date: payment.paidAt,
+      driver: fine.driver,
+      fine: fine._id,
+      finePayment: payment._id,
+      note: body.note || "",
+      createdBy: currentUser._id,
+    },
+    {
+      wallet: TRANSACTION_WALLETS.EXTERNAL,
+      direction: TRANSACTION_DIRECTIONS.IN,
+      source: isDeposit
+        ? TRANSACTION_SOURCES.DEBT_REPAY_DEPOSIT
+        : TRANSACTION_SOURCES.DEBT_REPAY_CASH,
+      amount: body.amount,
+      date: payment.paidAt,
+      driver: fine.driver,
+      fine: fine._id,
+      finePayment: payment._id,
+      note: body.note || "",
+      createdBy: currentUser._id,
+    },
+  ];
+  await writeLinkedTxs(txEntries);
 
-  await Transaction.create({
-    type: txType,
-    source: txSource,
-    amount: body.amount,
-    date: payment.paidAt,
-    driver: fine.driver,
-    fine: fine._id,
-    finePayment: payment._id,
-    note: body.note || "",
-    createdBy: currentUser._id,
-  });
-
-  if (body.source === PAYMENT_SOURCES.SYSTEM && fine.oylik) {
-    await Oylik.updateOne({ _id: fine.oylik }, { $inc: { finesTotal: body.amount } });
+  if (!isDeposit) {
+    driver.totalDebt = Math.max(0, driver.totalDebt - body.amount);
+    await driver.save();
   }
 
   fine.paidAmount += body.amount;
@@ -98,10 +113,6 @@ export const remove = async (id) => {
       driver.depositRemaining += payment.amount;
       await driver.save();
     }
-  }
-
-  if (payment.source === PAYMENT_SOURCES.SYSTEM && fine.oylik) {
-    await Oylik.updateOne({ _id: fine.oylik }, { $inc: { finesTotal: -payment.amount } });
   }
 
   await Transaction.deleteMany({ finePayment: payment._id });

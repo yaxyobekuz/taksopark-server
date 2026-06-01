@@ -4,7 +4,12 @@ import Car from "../../../models/car.model.js";
 import DailyPayment from "../../../models/dailyPayment.model.js";
 import Fine from "../../../models/fine.model.js";
 import Damage from "../../../models/damage.model.js";
-import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
+import Transaction, {
+  TRANSACTION_DIRECTIONS,
+  TRANSACTION_SOURCES,
+  TRANSACTION_WALLETS,
+} from "../../../models/transaction.model.js";
+import { writeWalletTx } from "../../../helpers/walletTransaction.helper.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS, TARIFF_CONFIG } from "../../../constants/tariffs.js";
 import { GRACE_DAYS } from "../../../constants/oyliklar.js";
@@ -55,7 +60,7 @@ export const ensureOyliklar = async (driver, asOf = new Date()) => {
   const carId = driver.car?._id || driver.car;
   while (startDate <= ref) {
     const win = computeOylikWindow(startDate);
-    await Oylik.create({
+    const newOylik = await Oylik.create({
       driver: driver._id,
       car: carId,
       oylikNumber: count + 1,
@@ -65,6 +70,12 @@ export const ensureOyliklar = async (driver, asOf = new Date()) => {
       expectedPlanTotal: 0,
       salary: cashback,
     });
+    if (driver.totalDebt > 0 && cashback > 0) {
+      const inc = Math.min(driver.totalDebt, cashback);
+      await Oylik.updateOne({ _id: newOylik._id }, { $inc: { finesTotal: inc } });
+      driver.totalDebt -= inc;
+      await driver.save();
+    }
     count += 1;
     startDate = startOfDayTashkent(addDays(win.endDate, 1));
   }
@@ -223,8 +234,9 @@ export const addPayout = async (id, body, currentUser) => {
   await oylik.save();
   const lastPayout = oylik.payouts[oylik.payouts.length - 1];
 
-  await Transaction.create({
-    type: TRANSACTION_TYPES.EXPENSE,
+  await writeWalletTx({
+    wallet: TRANSACTION_WALLETS.REVENUE,
+    direction: TRANSACTION_DIRECTIONS.OUT,
     source: TRANSACTION_SOURCES.OYLIK_PAYOUT,
     amount: body.amount,
     date: paidAt,

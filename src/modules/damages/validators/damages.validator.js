@@ -31,5 +31,6 @@ export const updateSchema = z.object({
   params: z.object({ id: objectId }),
   body: z.object({
     note: z.string().optional(),
+    amount: z.coerce.number().int().min(1).optional(),
   }),
 });

@@ -1,32 +1,17 @@
 import DailyPayment from "../../../models/dailyPayment.model.js";
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
 import Oylik from "../../../models/oylik.model.js";
-import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
+import Transaction, {
+  TRANSACTION_DIRECTIONS,
+  TRANSACTION_SOURCES,
+  TRANSACTION_WALLETS,
+} from "../../../models/transaction.model.js";
+import { writeWalletTx } from "../../../helpers/walletTransaction.helper.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS } from "../../../constants/tariffs.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
-
-// Depozit deltasi: deficit ushlanganda manfiy, ortiqcha to'lovda musbat.
-// Manfiy delta depozitni kamaytiradi, 0 dan oshsa qarzga yoziladi.
-// Musbat delta avval mavjud qarzni qoplaydi, qolgani depozitga qo'shiladi.
-const applyDepositDelta = async (driver, delta) => {
-  if (driver.tariff !== TARIFFS.DEPOSIT) return;
-  if (delta < 0) {
-    const raw = driver.depositRemaining + delta;
-    if (raw < 0) {
-      driver.totalDebt += -raw;
-      driver.depositRemaining = 0;
-    } else {
-      driver.depositRemaining = raw;
-    }
-  } else {
-    const debtPayoff = Math.min(driver.totalDebt, delta);
-    driver.totalDebt -= debtPayoff;
-    driver.depositRemaining += delta - debtPayoff;
-  }
-  await driver.save();
-};
+import { applyDepositDelta } from "../../../helpers/driverFinance.helper.js";
 
 const applyOylikDelta = async (oylikId, paidDelta) => {
   if (!oylikId) return;
@@ -41,8 +26,9 @@ const syncPaymentTransaction = async (payment, currentUser) => {
       { $set: { amount: payment.amount, date: payment.date, note: payment.note || "" } },
     );
     if (updated.matchedCount === 0) {
-      await Transaction.create({
-        type: TRANSACTION_TYPES.INCOME,
+      await writeWalletTx({
+        wallet: TRANSACTION_WALLETS.REVENUE,
+        direction: TRANSACTION_DIRECTIONS.IN,
         source: TRANSACTION_SOURCES.DAILY_PAYMENT,
         amount: payment.amount,
         date: payment.date,

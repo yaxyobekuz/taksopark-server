@@ -5,14 +5,31 @@ export const TRANSACTION_TYPES = Object.freeze({
   EXPENSE: "expense",
 });
 
+export const TRANSACTION_DIRECTIONS = Object.freeze({
+  IN: "in",
+  OUT: "out",
+});
+
+export const TRANSACTION_WALLETS = Object.freeze({
+  DEPOSIT: "deposit",
+  DEBT: "debt",
+  REVENUE: "revenue",
+  EXTERNAL: "external",
+});
+
 export const TRANSACTION_SOURCES = Object.freeze({
   DAILY_PAYMENT: "daily_payment",
-  FINE_PAYMENT_CASH: "fine_payment_cash",
-  FINE_PAYMENT_DEPOSIT: "fine_payment_deposit",
-  DAMAGE_PAYMENT_CASH: "damage_payment_cash",
-  DAMAGE_PAYMENT_DEPOSIT: "damage_payment_deposit",
-  FINE_SYSTEM: "fine_system",
-  DAMAGE_SYSTEM: "damage_system",
+  FINE_ISSUED: "fine_issued",
+  DAMAGE_ISSUED: "damage_issued",
+  FINE_DEPOSIT_DEDUCT: "fine_deposit_deduct",
+  DAMAGE_DEPOSIT_DEDUCT: "damage_deposit_deduct",
+  FINE_OYLIK_DEDUCT: "fine_oylik_deduct",
+  DAMAGE_OYLIK_DEDUCT: "damage_oylik_deduct",
+  FINE_DEBT_RECORD: "fine_debt_record",
+  DAMAGE_DEBT_RECORD: "damage_debt_record",
+  DEBT_REPAY_CASH: "debt_repay_cash",
+  DEBT_REPAY_DEPOSIT: "debt_repay_deposit",
+  DEBT_REPAY_OYLIK: "debt_repay_oylik",
   OYLIK_PAYOUT: "oylik_payout",
   DEPOSIT_TOPUP: "deposit_topup",
   DEPOSIT_WITHDRAW: "deposit_withdraw",
@@ -22,8 +39,11 @@ export const TRANSACTION_SOURCES = Object.freeze({
 
 const transactionSchema = new mongoose.Schema(
   {
+    wallet: { type: String, enum: Object.values(TRANSACTION_WALLETS), required: true, index: true },
+    direction: { type: String, enum: Object.values(TRANSACTION_DIRECTIONS), required: true, index: true },
     type: { type: String, enum: Object.values(TRANSACTION_TYPES), required: true, index: true },
     source: { type: String, enum: Object.values(TRANSACTION_SOURCES), required: true, index: true },
+    linkedTxId: { type: mongoose.Schema.Types.ObjectId, default: null },
     category: { type: String, trim: true, default: "" },
     amount: { type: Number, required: true, min: 1 },
     date: { type: Date, required: true, default: Date.now, index: true },
@@ -41,8 +61,9 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-transactionSchema.index({ type: 1, date: -1 });
+transactionSchema.index({ wallet: 1, date: -1 });
 transactionSchema.index({ driver: 1, date: -1 });
+transactionSchema.index({ linkedTxId: 1 });
 
 transactionSchema.set("toJSON", {
   transform: (_doc, ret) => {

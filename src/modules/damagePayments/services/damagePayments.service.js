@@ -1,11 +1,15 @@
 import Damage from "../../../models/damage.model.js";
 import DamagePayment from "../../../models/damagePayment.model.js";
 import { PAYMENT_SOURCES } from "../../../models/finePayment.model.js";
-import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
+import Transaction, {
+  TRANSACTION_DIRECTIONS,
+  TRANSACTION_SOURCES,
+  TRANSACTION_WALLETS,
+} from "../../../models/transaction.model.js";
 import Driver from "../../../models/driver.model.js";
-import Oylik from "../../../models/oylik.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS } from "../../../constants/tariffs.js";
+import { writeLinkedTxs } from "../../../helpers/walletTransaction.helper.js";
 
 const recomputeDamageStatus = (damage) => {
   if (damage.paidAmount <= 0) damage.paymentStatus = "pending";
@@ -52,32 +56,42 @@ export const create = async (body, currentUser) => {
     createdBy: currentUser._id,
   });
 
-  let txType, txSource;
-  if (body.source === PAYMENT_SOURCES.DRIVER_CASH) {
-    txType = TRANSACTION_TYPES.INCOME;
-    txSource = TRANSACTION_SOURCES.DAMAGE_PAYMENT_CASH;
-  } else if (body.source === PAYMENT_SOURCES.DEPOSIT) {
-    txType = TRANSACTION_TYPES.INCOME;
-    txSource = TRANSACTION_SOURCES.DAMAGE_PAYMENT_DEPOSIT;
-  } else {
-    txType = TRANSACTION_TYPES.EXPENSE;
-    txSource = TRANSACTION_SOURCES.DAMAGE_SYSTEM;
-  }
+  const isDeposit = body.source === PAYMENT_SOURCES.DEPOSIT;
+  const txEntries = [
+    {
+      wallet: isDeposit ? TRANSACTION_WALLETS.DEPOSIT : TRANSACTION_WALLETS.DEBT,
+      direction: TRANSACTION_DIRECTIONS.OUT,
+      source: isDeposit
+        ? TRANSACTION_SOURCES.DEBT_REPAY_DEPOSIT
+        : TRANSACTION_SOURCES.DEBT_REPAY_CASH,
+      amount: body.amount,
+      date: payment.paidAt,
+      driver: damage.driver,
+      damage: damage._id,
+      damagePayment: payment._id,
+      note: body.note || "",
+      createdBy: currentUser._id,
+    },
+    {
+      wallet: TRANSACTION_WALLETS.EXTERNAL,
+      direction: TRANSACTION_DIRECTIONS.IN,
+      source: isDeposit
+        ? TRANSACTION_SOURCES.DEBT_REPAY_DEPOSIT
+        : TRANSACTION_SOURCES.DEBT_REPAY_CASH,
+      amount: body.amount,
+      date: payment.paidAt,
+      driver: damage.driver,
+      damage: damage._id,
+      damagePayment: payment._id,
+      note: body.note || "",
+      createdBy: currentUser._id,
+    },
+  ];
+  await writeLinkedTxs(txEntries);
 
-  await Transaction.create({
-    type: txType,
-    source: txSource,
-    amount: body.amount,
-    date: payment.paidAt,
-    driver: damage.driver,
-    damage: damage._id,
-    damagePayment: payment._id,
-    note: body.note || "",
-    createdBy: currentUser._id,
-  });
-
-  if (body.source === PAYMENT_SOURCES.SYSTEM && damage.oylik) {
-    await Oylik.updateOne({ _id: damage.oylik }, { $inc: { damagesTotal: body.amount } });
+  if (!isDeposit) {
+    driver.totalDebt = Math.max(0, driver.totalDebt - body.amount);
+    await driver.save();
   }
 
   damage.paidAmount += body.amount;
@@ -99,10 +113,6 @@ export const remove = async (id) => {
       driver.depositRemaining += payment.amount;
       await driver.save();
     }
-  }
-
-  if (payment.source === PAYMENT_SOURCES.SYSTEM && damage.oylik) {
-    await Oylik.updateOne({ _id: damage.oylik }, { $inc: { damagesTotal: -payment.amount } });
   }
 
   await Transaction.deleteMany({ damagePayment: payment._id });

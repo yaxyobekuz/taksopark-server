@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 export const PAYMENT_SOURCES = Object.freeze({
   DRIVER_CASH: "driver_cash",
   DEPOSIT: "deposit",
-  SYSTEM: "system",
 });
 
 const finePaymentSchema = new mongoose.Schema(

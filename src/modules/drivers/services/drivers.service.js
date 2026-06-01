@@ -5,9 +5,15 @@ import Oylik from "../../../models/oylik.model.js";
 import DriverDocumentType from "../../../models/driverDocumentType.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { TARIFFS, ALL_TARIFFS, TARIFF_CONFIG, DEPOSIT_WARN_THRESHOLD } from "../../../constants/tariffs.js";
-import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
+import {
+  TRANSACTION_DIRECTIONS,
+  TRANSACTION_SOURCES,
+  TRANSACTION_WALLETS,
+} from "../../../models/transaction.model.js";
+import { writeLinkedTxs } from "../../../helpers/walletTransaction.helper.js";
 import { startOfDayTashkent, daysBetween, addDays } from "../../../utils/timezone.js";
 import { removeFileByUrl, fileToPublicUrl } from "../../../utils/fileStorage.js";
+import { applyDepositDelta } from "../../../helpers/driverFinance.helper.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -219,19 +225,68 @@ export const adjustDeposit = async (id, body, currentUser) => {
     throw new ApiError(400, `Depozitda yetarli mablag' yo'q. Qoldi: ${driver.depositRemaining}`);
   }
 
-  driver.depositRemaining += delta;
+  const prevDebt = driver.totalDebt;
+  await applyDepositDelta(driver, delta);
   driver.depositInitial = Math.max(driver.depositInitial, driver.depositRemaining);
   await driver.save();
 
-  await Transaction.create({
-    type: delta > 0 ? TRANSACTION_TYPES.INCOME : TRANSACTION_TYPES.EXPENSE,
-    source: delta > 0 ? TRANSACTION_SOURCES.DEPOSIT_TOPUP : TRANSACTION_SOURCES.DEPOSIT_WITHDRAW,
-    amount: Math.abs(delta),
-    date: new Date(),
-    driver: driver._id,
-    note: body.note || "",
-    createdBy: currentUser._id,
-  });
+  const now = new Date();
+  const note = body.note || "";
+  const txEntries = [];
+
+  if (delta > 0) {
+    const debtRepaid = prevDebt - driver.totalDebt; // 0..delta
+    const toDeposit = delta - debtRepaid;
+    if (toDeposit > 0) {
+      txEntries.push({
+        wallet: TRANSACTION_WALLETS.DEPOSIT,
+        direction: TRANSACTION_DIRECTIONS.IN,
+        source: TRANSACTION_SOURCES.DEPOSIT_TOPUP,
+        amount: toDeposit,
+        date: now,
+        driver: driver._id,
+        note,
+        createdBy: currentUser._id,
+      });
+    }
+    if (debtRepaid > 0) {
+      txEntries.push(
+        {
+          wallet: TRANSACTION_WALLETS.DEBT,
+          direction: TRANSACTION_DIRECTIONS.OUT,
+          source: TRANSACTION_SOURCES.DEBT_REPAY_DEPOSIT,
+          amount: debtRepaid,
+          date: now,
+          driver: driver._id,
+          note,
+          createdBy: currentUser._id,
+        },
+        {
+          wallet: TRANSACTION_WALLETS.EXTERNAL,
+          direction: TRANSACTION_DIRECTIONS.IN,
+          source: TRANSACTION_SOURCES.DEBT_REPAY_DEPOSIT,
+          amount: debtRepaid,
+          date: now,
+          driver: driver._id,
+          note,
+          createdBy: currentUser._id,
+        },
+      );
+    }
+  } else {
+    txEntries.push({
+      wallet: TRANSACTION_WALLETS.DEPOSIT,
+      direction: TRANSACTION_DIRECTIONS.OUT,
+      source: TRANSACTION_SOURCES.DEPOSIT_WITHDRAW,
+      amount: Math.abs(delta),
+      date: now,
+      driver: driver._id,
+      note,
+      createdBy: currentUser._id,
+    });
+  }
+
+  await writeLinkedTxs(txEntries);
 
   return driver;
 };
@@ -269,15 +324,18 @@ export const changeTariff = async (id, body, currentUser) => {
     // deposit -> no_deposit: depozit qaytariladi, cashback darhol boshlanadi (sinovsiz).
     const refund = driver.depositRemaining;
     if (refund > 0) {
-      await Transaction.create({
-        type: TRANSACTION_TYPES.EXPENSE,
-        source: TRANSACTION_SOURCES.DEPOSIT_REFUND,
-        amount: refund,
-        date: new Date(),
-        driver: driver._id,
-        note: body.note || "Tarif o'zgarishi: depozit qaytarildi",
-        createdBy: currentUser._id,
-      });
+      await writeLinkedTxs([
+        {
+          wallet: TRANSACTION_WALLETS.DEPOSIT,
+          direction: TRANSACTION_DIRECTIONS.OUT,
+          source: TRANSACTION_SOURCES.DEPOSIT_REFUND,
+          amount: refund,
+          date: new Date(),
+          driver: driver._id,
+          note: body.note || "Tarif o'zgarishi: depozit qaytarildi",
+          createdBy: currentUser._id,
+        },
+      ]);
     }
     driver.depositRemaining = 0;
     driver.depositInitial = 0;

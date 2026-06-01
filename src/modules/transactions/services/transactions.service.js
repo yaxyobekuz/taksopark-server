@@ -1,11 +1,17 @@
-import Transaction, { TRANSACTION_TYPES, TRANSACTION_SOURCES } from "../../../models/transaction.model.js";
+import Transaction, {
+  TRANSACTION_DIRECTIONS,
+  TRANSACTION_TYPES,
+  TRANSACTION_SOURCES,
+  TRANSACTION_WALLETS,
+} from "../../../models/transaction.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent, endOfDayTashkent } from "../../../utils/timezone.js";
 
-export const list = async ({ type, source, driverId, fromDate, toDate, page = 1, limit = 20 }) => {
+export const list = async ({ type, source, wallet, driverId, fromDate, toDate, page = 1, limit = 20 }) => {
   const filter = {};
   if (type) filter.type = type;
   if (source) filter.source = source;
+  if (wallet) filter.wallet = wallet;
   if (driverId) filter.driver = driverId;
   if (fromDate || toDate) {
     filter.date = {};
@@ -26,26 +32,38 @@ export const list = async ({ type, source, driverId, fromDate, toDate, page = 1,
   return { items, total };
 };
 
-export const summary = async ({ fromDate, toDate }) => {
+export const summary = async ({ fromDate, toDate, wallet }) => {
   const match = {};
   if (fromDate || toDate) {
     match.date = {};
     if (fromDate) match.date.$gte = startOfDayTashkent(fromDate);
     if (toDate) match.date.$lte = endOfDayTashkent(toDate);
   }
+  if (wallet) match.wallet = wallet;
   const rows = await Transaction.aggregate([
     { $match: match },
-    { $group: { _id: { type: "$type", source: "$source" }, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+    {
+      $group: {
+        _id: { wallet: "$wallet", direction: "$direction" },
+        amount: { $sum: "$amount" },
+        count: { $sum: 1 },
+      },
+    },
   ]);
-  let income = 0;
-  let expense = 0;
-  const bySource = {};
-  for (const r of rows) {
-    if (r._id.type === TRANSACTION_TYPES.INCOME) income += r.amount;
-    else expense += r.amount;
-    bySource[r._id.source] = (bySource[r._id.source] || 0) + r.amount;
+  const byWallet = {};
+  for (const wKey of Object.values(TRANSACTION_WALLETS)) {
+    byWallet[wKey] = { in: 0, out: 0, net: 0 };
   }
-  return { income, expense, balance: income - expense, bySource };
+  for (const r of rows) {
+    const w = r._id.wallet;
+    if (!byWallet[w]) continue;
+    if (r._id.direction === TRANSACTION_DIRECTIONS.IN) byWallet[w].in += r.amount;
+    else byWallet[w].out += r.amount;
+  }
+  for (const w of Object.keys(byWallet)) {
+    byWallet[w].net = byWallet[w].in - byWallet[w].out;
+  }
+  return { byWallet };
 };
 
 export const create = async (body, currentUser) => {
@@ -55,8 +73,14 @@ export const create = async (body, currentUser) => {
   if (!body.category || !body.category.trim()) {
     throw new ApiError(400, "Kategoriya kerak");
   }
+  const direction =
+    body.type === TRANSACTION_TYPES.INCOME
+      ? TRANSACTION_DIRECTIONS.IN
+      : TRANSACTION_DIRECTIONS.OUT;
   const tx = await Transaction.create({
     type: body.type,
+    direction,
+    wallet: TRANSACTION_WALLETS.REVENUE,
     source: TRANSACTION_SOURCES.MANUAL,
     category: body.category.trim(),
     amount: body.amount,
@@ -77,6 +101,10 @@ export const update = async (id, body) => {
     throw new ApiError(400, "Kategoriya kerak");
   }
   tx.type = body.type;
+  tx.direction =
+    body.type === TRANSACTION_TYPES.INCOME
+      ? TRANSACTION_DIRECTIONS.IN
+      : TRANSACTION_DIRECTIONS.OUT;
   tx.category = body.category.trim();
   tx.amount = body.amount;
   if (body.date) tx.date = new Date(body.date);
