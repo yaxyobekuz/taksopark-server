@@ -128,8 +128,9 @@ export const create = async (body, currentUser) => {
   if (oylikId) await applyOylikDelta(oylikId, body.amount);
 
   if (body.amount > 0) {
-    await Transaction.create({
-      type: TRANSACTION_TYPES.INCOME,
+    await writeWalletTx({
+      wallet: TRANSACTION_WALLETS.REVENUE,
+      direction: TRANSACTION_DIRECTIONS.IN,
       source: TRANSACTION_SOURCES.DAILY_PAYMENT,
       amount: body.amount,
       date,
