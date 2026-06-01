@@ -17,6 +17,7 @@ import finePaymentsRouter from "../modules/finePayments/finePayments.routes.js";
 import damagePaymentsRouter from "../modules/damagePayments/damagePayments.routes.js";
 import transactionsRouter from "../modules/transactions/transactions.routes.js";
 import transactionCategoriesRouter from "../modules/transactionCategories/transactionCategories.routes.js";
+import financeReportRouter from "../modules/financeReport/financeReport.routes.js";
 
 const router = Router();
 
@@ -42,5 +43,6 @@ router.use("/fine-payments", finePaymentsRouter);
 router.use("/damage-payments", damagePaymentsRouter);
 router.use("/transactions", transactionsRouter);
 router.use("/transaction-categories", transactionCategoriesRouter);
+router.use("/finance-report", financeReportRouter);
 
 export default router;

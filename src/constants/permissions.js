@@ -52,6 +52,8 @@ export const PERMISSIONS = Object.freeze({
   TRANSACTIONS_CATEGORIES_MANAGE: "transactions.categories.manage",
 
   REPORTS_READ: "reports.read",
+
+  FINANCE_REPORT_READ: "finance_report.read",
 });
 
 export const PERMISSION_LABELS = {
@@ -107,4 +109,6 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.TRANSACTIONS_CATEGORIES_MANAGE]: { label: "Tranzaksiya kategoriyalarini boshqarish", group: "transactions" },
 
   [PERMISSIONS.REPORTS_READ]: { label: "Hisobotlarni ko'rish", group: "reports" },
+
+  [PERMISSIONS.FINANCE_REPORT_READ]: { label: "Moliyaviy hisobotni ko'rish", group: "finance_report" },
 };
