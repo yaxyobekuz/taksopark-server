@@ -63,7 +63,13 @@ export const summary = async ({ fromDate, toDate, wallet }) => {
   for (const w of Object.keys(byWallet)) {
     byWallet[w].net = byWallet[w].in - byWallet[w].out;
   }
-  return { byWallet };
+  const revenue = byWallet[TRANSACTION_WALLETS.REVENUE];
+  return {
+    byWallet,
+    income: revenue.in,
+    expense: revenue.out,
+    balance: revenue.in - revenue.out,
+  };
 };
 
 export const create = async (body, currentUser) => {

@@ -6,7 +6,7 @@ import Damage from "../../../models/damage.model.js";
 import Oylik from "../../../models/oylik.model.js";
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
-import Transaction, { TRANSACTION_TYPES } from "../../../models/transaction.model.js";
+import Transaction, { TRANSACTION_TYPES, TRANSACTION_WALLETS } from "../../../models/transaction.model.js";
 import { startOfDayTashkent, endOfDayTashkent } from "../../../utils/timezone.js";
 import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
 import { TARIFFS } from "../../../constants/tariffs.js";
@@ -196,7 +196,7 @@ export const monthlyIncomeExpense = async () => {
   const to = new Date();
 
   const rows = await Transaction.aggregate([
-    { $match: { date: { $gte: from, $lte: to } } },
+    { $match: { date: { $gte: from, $lte: to }, wallet: TRANSACTION_WALLETS.REVENUE } },
     {
       $group: {
         _id: {
@@ -255,7 +255,7 @@ export const dailyIncomeExpense = async ({ days = 30 }) => {
   const to = new Date();
 
   const rows = await Transaction.aggregate([
-    { $match: { date: { $gte: from, $lte: to } } },
+    { $match: { date: { $gte: from, $lte: to }, wallet: TRANSACTION_WALLETS.REVENUE } },
     {
       $group: {
         _id: {
@@ -299,7 +299,7 @@ export const dailyIncomeExpense = async ({ days = 30 }) => {
 
 // Tanlangan davr bo'yicha kategoriya kesimida kirim/chiqim.
 export const categoryMonthly = async ({ fromDate, toDate }) => {
-  const match = {};
+  const match = { wallet: TRANSACTION_WALLETS.REVENUE };
   if (fromDate || toDate) {
     match.date = {};
     if (fromDate) match.date.$gte = startOfDayTashkent(fromDate);
