@@ -175,17 +175,16 @@ export const statementForDriver = async (driverId) => {
 
   let running = 0;
   const rows = oyliklar.map((o) => {
-    const planDeficit = Math.max(0, o.expectedPlanTotal - o.paidTotal);
-    const deductions = planDeficit + o.finesTotal + o.damagesTotal;
-    const earned = Math.max(0, o.salary - deductions);
-    const remaining = Math.max(0, earned - o.paidOut);
-    running += earned - o.paidOut;
+    const { planDeficit, overpay, deductions, earnedPayout, remainingPayout } =
+      computeOylikDerived(o);
+    running += earnedPayout - o.paidOut;
     return {
       ...o,
       planDeficit,
+      overpay,
       deductions,
-      earnedPayout: earned,
-      remainingPayout: remaining,
+      earnedPayout,
+      remainingPayout,
       runningBalance: running,
     };
   });
@@ -204,11 +203,17 @@ export const statementForDriver = async (driverId) => {
   return { driver, totals, rows, currentBalance: running };
 };
 
-const earnedPayoutOf = (oylik) => {
+// Oddiy maydonlardan (virtualsiz, lean/populate uchun) hosilaviy qiymatlarni hisoblaydi.
+const computeOylikDerived = (oylik) => {
   const planDeficit = Math.max(0, oylik.expectedPlanTotal - oylik.paidTotal);
+  const overpay = Math.max(0, oylik.paidTotal - oylik.expectedPlanTotal);
   const deductions = planDeficit + oylik.finesTotal + oylik.damagesTotal;
-  return Math.max(0, oylik.salary - deductions);
+  const earnedPayout = Math.max(0, oylik.salary - deductions + overpay);
+  const remainingPayout = Math.max(0, earnedPayout - (oylik.paidOut || 0));
+  return { planDeficit, overpay, deductions, earnedPayout, remainingPayout };
 };
+
+const earnedPayoutOf = (oylik) => computeOylikDerived(oylik).earnedPayout;
 
 export const addPayout = async (id, body, currentUser) => {
   const oylik = await Oylik.findById(id);
@@ -217,10 +222,10 @@ export const addPayout = async (id, body, currentUser) => {
     throw new ApiError(400, "To'lov summasi noto'g'ri");
   }
 
-  // Avans to'liq oylik cashback summasigacha olinishi mumkin (mijoz qoidasi).
-  const remaining = Math.max(0, oylik.salary - oylik.paidOut);
+  // Avans hisoblangan haq (salary − ushlovlar + ortiqcha bonus) gacha olinishi mumkin.
+  const remaining = Math.max(0, earnedPayoutOf(oylik) - oylik.paidOut);
   if (body.amount > remaining) {
-    throw new ApiError(400, `Oylik cashback summasidan oshib ketdi. Qoldi: ${remaining}`);
+    throw new ApiError(400, `Hisoblangan haqdan oshib ketdi. Qoldi: ${remaining}`);
   }
 
   const paidAt = body.paidAt ? new Date(body.paidAt) : new Date();
@@ -259,9 +264,9 @@ export const updatePayout = async (oylikId, payoutId, body) => {
   if (body.amount !== undefined) {
     if (body.amount <= 0) throw new ApiError(400, "To'lov summasi noto'g'ri");
     const otherPaid = oylik.paidOut - payout.amount;
-    const remaining = Math.max(0, oylik.salary - otherPaid);
+    const remaining = Math.max(0, earnedPayoutOf(oylik) - otherPaid);
     if (body.amount > remaining) {
-      throw new ApiError(400, `Oylik cashback summasidan oshib ketdi. Qoldi: ${remaining}`);
+      throw new ApiError(400, `Hisoblangan haqdan oshib ketdi. Qoldi: ${remaining}`);
     }
     oylik.paidOut = otherPaid + body.amount;
     payout.amount = body.amount;

@@ -394,15 +394,17 @@ export const getBalance = async (id) => {
 
     if (oylik) {
       const planDeficit = Math.max(0, oylik.expectedPlanTotal - oylik.paidTotal);
+      const overpay = Math.max(0, oylik.paidTotal - oylik.expectedPlanTotal);
       const deductions = planDeficit + oylik.finesTotal + oylik.damagesTotal;
-      const earnedPayout = Math.max(0, oylik.salary - deductions);
+      const earnedPayout = Math.max(0, oylik.salary - deductions + overpay);
       const remainingPayout = Math.max(0, earnedPayout - oylik.paidOut);
-      const debt = Math.max(0, deductions - oylik.salary);
+      const debt = Math.max(0, deductions - oylik.salary - overpay);
       const isLate = Date.now() > new Date(oylik.dueDate).getTime();
       const lateDays = isLate ? Math.floor((Date.now() - new Date(oylik.dueDate).getTime()) / 86_400_000) : 0;
       result.oylik = {
         ...oylik.toJSON(),
         planDeficit,
+        overpay,
         deductions,
         earnedPayout,
         remainingPayout,

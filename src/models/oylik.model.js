@@ -38,11 +38,15 @@ oylikSchema.index({ driver: 1, oylikNumber: 1 }, { unique: true });
 oylikSchema.virtual("planDeficit").get(function () {
   return Math.max(0, this.expectedPlanTotal - this.paidTotal);
 });
+// Oy bo'yicha rejadan ortiqcha to'lov cashbackga bonus bo'lib qo'shiladi.
+oylikSchema.virtual("overpay").get(function () {
+  return Math.max(0, this.paidTotal - this.expectedPlanTotal);
+});
 oylikSchema.virtual("deductions").get(function () {
   return this.planDeficit + this.finesTotal + this.damagesTotal;
 });
 oylikSchema.virtual("earnedPayout").get(function () {
-  return Math.max(0, this.salary - this.deductions);
+  return Math.max(0, this.salary - this.deductions + this.overpay);
 });
 oylikSchema.virtual("remainingPayout").get(function () {
   return Math.max(0, this.earnedPayout - this.paidOut);
