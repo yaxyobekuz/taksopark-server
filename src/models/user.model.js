@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema(
     firstName: { type: String, trim: true, required: true },
     lastName: { type: String, trim: true, required: true },
     username: { type: String, trim: true, unique: true, required: true, lowercase: true },
-    phone: { type: String, trim: true, unique: true, sparse: true },
+    phone: { type: String, trim: true, default: undefined },
     passwordHash: { type: String, select: false },
     password: { type: String, select: false },
     role: { type: String, enum: ALL_ROLES, default: ROLES.OWNER, required: true },
