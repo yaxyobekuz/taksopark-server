@@ -12,7 +12,6 @@ export const listSchema = z.object({
     carId: objectId.optional(),
     fromDate: z.string().optional(),
     toDate: z.string().optional(),
-    paymentStatus: z.enum(["pending", "partial", "paid"]).optional(),
     page: z.coerce.number().int().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(500).optional(),
   }),
