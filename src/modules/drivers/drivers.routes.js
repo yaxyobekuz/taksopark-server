@@ -7,6 +7,7 @@ import { PERMISSIONS } from "../../constants/permissions.js";
 import {
   listSchema,
   idSchema,
+  removeSchema,
   createSchema,
   updateSchema,
   addDocumentSchema,
@@ -28,7 +29,7 @@ router.get("/", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), valida
 router.get("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), validate(idSchema), getById);
 router.post("/", requireAuth, requirePermission(PERMISSIONS.DRIVERS_CREATE), singleUploader("drivers", "photo"), validate(createSchema), create);
 router.patch("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_UPDATE), singleUploader("drivers", "photo"), validate(updateSchema), update);
-router.delete("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_DELETE), validate(idSchema), remove);
+router.delete("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_DELETE), validate(removeSchema), remove);
 
 router.post(
   "/:id/documents",

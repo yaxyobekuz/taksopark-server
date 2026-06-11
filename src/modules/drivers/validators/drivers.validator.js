@@ -13,6 +13,15 @@ export const idSchema = z.object({
   params: z.object({ id: objectId }),
 });
 
+export const removeSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    endDate: z
+      .string()
+      .refine((s) => !Number.isNaN(new Date(s).getTime()), "Ishni tugatish sanasi noto'g'ri"),
+  }),
+});
+
 export const listSchema = z.object({
   query: z.object({
     status: z.enum(Object.values(DRIVER_STATUS)).optional(),

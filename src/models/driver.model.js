@@ -37,6 +37,7 @@ const driverSchema = new mongoose.Schema(
 
     car: { type: mongoose.Schema.Types.ObjectId, ref: "Car", default: null, index: true },
     startDate: { type: Date, required: true },
+    endDate: { type: Date, default: null },
 
     status: {
       type: String,

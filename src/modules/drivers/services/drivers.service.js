@@ -107,12 +107,18 @@ export const update = async (id, body) => {
   return driver;
 };
 
-export const softRemove = async (id) => {
+export const softRemove = async (id, { endDate } = {}) => {
   const driver = await Driver.findById(id);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
+  if (!endDate) throw new ApiError(400, "Ishni tugatish sanasi kerak");
+  const end = startOfDayTashkent(endDate);
+  if (end < startOfDayTashkent(driver.startDate)) {
+    throw new ApiError(409, "Ishni tugatish sanasi ish boshlash sanasidan oldin bo'lishi mumkin emas");
+  }
   await detachCarFromDriver(driver);
   driver.car = null;
   driver.status = DRIVER_STATUS.ARCHIVED;
+  driver.endDate = end;
   await driver.save();
   return driver;
 };
