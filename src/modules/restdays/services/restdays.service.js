@@ -1,9 +1,7 @@
 import RestDay from "../../../models/restDay.model.js";
 import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
-import DailyPayment from "../../../models/dailyPayment.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent, addDays, addMonths, endOfDayTashkent, dateKeyTashkent } from "../../../utils/timezone.js";
-import { getActiveTariffPhase } from "../../drivers/services/drivers.service.js";
 
 export const isRestDay = async (driverId, date) => {
   const day = startOfDayTashkent(date);
@@ -42,12 +40,6 @@ export const create = async (body, currentUser) => {
 
   const date = startOfDayTashkent(body.date);
 
-  // To'lov mavjud va 0 dan katta bo'lsa, bu kunni dam olish qilib bo'lmaydi.
-  const payment = await DailyPayment.findOne({ driver: driver._id, date });
-  if (payment && payment.amount > 0) {
-    throw new ApiError(409, "Bu kun uchun to'lov mavjud, dam olish kuni qilib bo'lmaydi");
-  }
-
   try {
     return await RestDay.create({
       driver: driver._id,
@@ -70,12 +62,9 @@ export const remove = async (id) => {
   await restDay.deleteOne();
 };
 
-// Tanlangan oyning har bir kuni uchun to'lov holati va dam olish belgisini qaytaradi.
+// Tanlangan oyning har bir kuni uchun dam olish belgisini qaytaradi.
 export const monthCalendar = async ({ driverId, year, month }) => {
-  const driver = await Driver.findById(driverId).populate(
-    "car",
-    "plateNumber model dailyPaymentDeposit dailyPaymentNoDeposit monthlyCashback",
-  );
+  const driver = await Driver.findById(driverId).populate("car", "plateNumber model");
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
 
   // Oyning birinchi va oxirgi kunini Tashkent TZ bilan hisoblaymiz.
@@ -83,14 +72,11 @@ export const monthCalendar = async ({ driverId, year, month }) => {
   const nextMonthStart = startOfDayTashkent(addMonths(monthStart, 1));
   const monthEnd = endOfDayTashkent(addDays(nextMonthStart, -1));
 
-  const [payments, restDays] = await Promise.all([
-    DailyPayment.find({ driver: driver._id, date: { $gte: monthStart, $lte: monthEnd } }),
-    RestDay.find({ driver: driver._id, date: { $gte: monthStart, $lte: monthEnd } }),
-  ]);
+  const restDays = await RestDay.find({
+    driver: driver._id,
+    date: { $gte: monthStart, $lte: monthEnd },
+  });
 
-  const paymentByTime = new Map(
-    payments.map((p) => [startOfDayTashkent(p.date).getTime(), p]),
-  );
   const restByTime = new Map(
     restDays.map((r) => [startOfDayTashkent(r.date).getTime(), r]),
   );
@@ -98,28 +84,12 @@ export const monthCalendar = async ({ driverId, year, month }) => {
   const days = [];
   let cursor = monthStart;
   while (cursor < nextMonthStart) {
-    const t = cursor.getTime();
-    const payment = paymentByTime.get(t) || null;
-    const rest = restByTime.get(t) || null;
-
-    let dailyPlan = 0;
-    if (driver.car) {
-      try {
-        dailyPlan = getActiveTariffPhase(driver, driver.car, cursor).dailyPlan;
-      } catch {
-        dailyPlan = 0;
-      }
-    }
-
+    const rest = restByTime.get(cursor.getTime()) || null;
     days.push({
       date: cursor,
       dateKey: dateKeyTashkent(cursor),
       isRestDay: !!rest,
       restDayId: rest?._id || null,
-      payment: payment
-        ? { id: payment._id, amount: payment.amount, expectedPlan: payment.expectedPlan }
-        : null,
-      dailyPlan,
     });
     cursor = startOfDayTashkent(addDays(cursor, 1));
   }
