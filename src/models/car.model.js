@@ -24,10 +24,6 @@ const carSchema = new mongoose.Schema(
     plateNumber: { type: String, trim: true, unique: true, sparse: true, default: null },
     model: { type: String, trim: true, required: true },
 
-    dailyPaymentDeposit: { type: Number, required: true, min: 0 },
-    dailyPaymentNoDeposit: { type: Number, required: true, min: 0 },
-    monthlyCashback: { type: Number, required: true, min: 0 },
-
     notes: { type: String, trim: true, default: "" },
     photoUrl: { type: String, default: "" },
     isActive: { type: Boolean, default: true, index: true },
