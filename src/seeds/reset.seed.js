@@ -7,13 +7,8 @@ import RefreshToken from "../models/refreshToken.model.js";
 import ActivityLog from "../models/activityLog.model.js";
 import Car from "../models/car.model.js";
 import Driver from "../models/driver.model.js";
-import DailyPayment from "../models/dailyPayment.model.js";
 import Fine from "../models/fine.model.js";
 import Damage from "../models/damage.model.js";
-import FinePayment from "../models/finePayment.model.js";
-import DamagePayment from "../models/damagePayment.model.js";
-import Oylik from "../models/oylik.model.js";
-import Transaction from "../models/transaction.model.js";
 import { PERMISSIONS, PERMISSION_LABELS } from "../constants/permissions.js";
 import { ALL_ROLES, ROLES } from "../constants/roles.js";
 import { hashPassword } from "../helpers/password.helper.js";
@@ -37,13 +32,8 @@ const seed = async () => {
     ActivityLog.deleteMany({}),
     Car.deleteMany({}),
     Driver.deleteMany({}),
-    DailyPayment.deleteMany({}),
     Fine.deleteMany({}),
     Damage.deleteMany({}),
-    FinePayment.deleteMany({}),
-    DamagePayment.deleteMany({}),
-    Oylik.deleteMany({}),
-    Transaction.deleteMany({}),
   ]);
   logger.info("Barcha data tozalandi (foydalanuvchilar, sessiyalar, biznes data)");
 

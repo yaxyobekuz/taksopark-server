@@ -11,8 +11,7 @@
     "seed:owner": "node src/seeds/owner.seed.js",
     "seed:demo": "node src/seeds/demo.seed.js",
     "seed:reset": "node src/seeds/reset.seed.js",
-    "seed:cars": "node src/seeds/cars.seed.js",
-    "migrate:wallets": "node src/seeds/migrate-wallets.seed.js"
+    "seed:cars": "node src/seeds/cars.seed.js"
   },
   "dependencies": {
     "agenda": "^5.0.0",
