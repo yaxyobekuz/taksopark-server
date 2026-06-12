@@ -1,7 +1,9 @@
-import Transaction, { TX_TYPE } from "../../../models/transaction.model.js";
+import Transaction, { TX_TYPE, TX_SOURCE } from "../../../models/transaction.model.js";
 import DailyPlan from "../../../models/dailyPlan.model.js";
+import DepositTransaction, { DEPOSIT_TX_TYPE } from "../../../models/depositTransaction.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { paidByPlan, getPlanById } from "./dailyPlans.service.js";
+import { settleDriver } from "../../finance/services/settlement.service.js";
 
 // Plan uchun barcha tranzaksiyalar (audit izi - eskidan yangiga).
 export const listByPlan = async (dailyPlanId) => {
@@ -45,20 +47,37 @@ export const createPayment = async (dailyPlanId, { amount, note }, currentUser) 
     throw new ApiError(400, "To'lov summasi musbat bo'lishi kerak");
   }
 
-  // Ortiqcha to'lov endi qabul qilinadi — o'sha kun rejasidan oshgan qism haydovchi
-  // hisobiga (depozit/balans) tushadi (§10). Bo'lib-bo'lib to'lash ham saqlanadi.
+  // Haydovchi naqd to'lovi avval o'sha kun qoldig'iga yoziladi; oshgan qism (ortiqcha
+  // to'lov) haydovchi hisobiga (depozit/balans) KIRIM bo'ladi (§10).
+  const paid = await paidByPlan([plan._id]);
+  const remaining = Math.max(0, (plan.planAmount || 0) - (paid.get(String(plan._id)) || 0));
+  const toPlan = Math.min(value, remaining);
+  const excess = value - toPlan;
 
-  await Transaction.create({
-    dailyPlan: plan._id,
-    driver: plan.driver,
-    date: plan.date,
-    type: TX_TYPE.PAYMENT,
-    amount: value,
-    note: note || "",
-    createdBy: currentUser._id,
-  });
+  if (toPlan > 0) {
+    await Transaction.create({
+      dailyPlan: plan._id,
+      driver: plan.driver,
+      date: plan.date,
+      type: TX_TYPE.PAYMENT,
+      source: TX_SOURCE.DRIVER,
+      amount: toPlan,
+      note: note || "",
+      createdBy: currentUser._id,
+    });
+  }
+  if (excess > 0) {
+    await DepositTransaction.create({
+      driver: plan.driver,
+      type: DEPOSIT_TX_TYPE.IN,
+      amount: excess,
+      note: "Ortiqcha to'lov",
+      createdBy: currentUser._id,
+    });
+  }
 
-  // Yangilangan plan (DERIVED to'langan/qarz bilan) qaytariladi.
+  // Yangi mablag' bo'lsa, boshqa qarzlarni qoplash uchun settlement.
+  await settleDriver(plan.driver, currentUser._id);
   return getPlanById(plan._id);
 };
 

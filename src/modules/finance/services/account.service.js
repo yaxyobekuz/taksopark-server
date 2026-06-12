@@ -7,6 +7,9 @@ import Damage from "../../../models/damage.model.js";
 import { ensureUpToToday } from "../../payments/services/dailyPlans.service.js";
 import * as workPeriods from "../../workPeriods/services/workPeriods.service.js";
 import * as cashbackAccrual from "./cashbackAccrual.service.js";
+import { coverageByRef } from "./settlement.service.js";
+
+const sumMap = (m) => [...m.values()].reduce((s, v) => s + v, 0);
 
 // Haydovchining YAGONA moliyaviy hisobi (§10). Hech narsa saqlanmaydi — barchasi
 // manbalardan (kunlik plan, to'lov, depozit, keshbek, jarima, zarar) DERIVED.
@@ -44,18 +47,21 @@ export const computeForDriver = async (driverId) => {
   const firstWork = await workPeriods.firstStartDate(driverId);
   if (firstWork) await ensureUpToToday(driverId, firstWork);
 
-  const [dailyAgg, pay, dep, cbTx, fines, damages, accrual] = await Promise.all([
-    DailyPlan.aggregate([
-      { $match: { driver: driverId } },
-      { $group: { _id: null, sum: { $sum: "$planAmount" } } },
-    ]),
-    signedSum(Transaction, driverId, TX_TYPE.PAYMENT, TX_TYPE.REVERSAL),
-    signedSum(DepositTransaction, driverId, DEPOSIT_TX_TYPE.IN, DEPOSIT_TX_TYPE.OUT),
-    signedSum(CashbackTransaction, driverId, CASHBACK_TX_TYPE.PAYOUT, CASHBACK_TX_TYPE.REVERSAL),
-    sumAmount(Fine, driverId),
-    sumAmount(Damage, driverId),
-    cashbackAccrual.accruedTotal(driverId),
-  ]);
+  const [dailyAgg, pay, dep, cbTx, finesTotal, damagesTotal, accrual, finesCov, damagesCov] =
+    await Promise.all([
+      DailyPlan.aggregate([
+        { $match: { driver: driverId } },
+        { $group: { _id: null, sum: { $sum: "$planAmount" } } },
+      ]),
+      signedSum(Transaction, driverId, TX_TYPE.PAYMENT, TX_TYPE.REVERSAL),
+      signedSum(DepositTransaction, driverId, DEPOSIT_TX_TYPE.IN, DEPOSIT_TX_TYPE.OUT),
+      signedSum(CashbackTransaction, driverId, CASHBACK_TX_TYPE.PAYOUT, CASHBACK_TX_TYPE.REVERSAL),
+      sumAmount(Fine, driverId),
+      sumAmount(Damage, driverId),
+      cashbackAccrual.accruedTotal(driverId),
+      coverageByRef(driverId, "fine"),
+      coverageByRef(driverId, "damage"),
+    ]);
 
   const daily = dailyAgg[0]?.sum || 0;
   const payments = pay.plus - pay.minus;
@@ -63,6 +69,9 @@ export const computeForDriver = async (driverId) => {
   const depositOut = dep.minus;
   const cashbackAccrued = accrual;
   const cashbackPayout = cbTx.plus - cbTx.minus;
+  // Jarima/zarar — qoplanmagan qismi (qoplangani depozit/keshbek chiqimida hisoblangan).
+  const fines = finesTotal - sumMap(finesCov);
+  const damages = damagesTotal - sumMap(damagesCov);
 
   const credits = payments + depositIn + cashbackAccrued;
   const debits = daily + fines + damages + depositOut + cashbackPayout;

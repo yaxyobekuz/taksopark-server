@@ -3,6 +3,7 @@ import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import * as account from "./account.service.js";
+import { settleDriver } from "./settlement.service.js";
 
 // Depozit balansi = haydovchining UMUMIY hisob qoldig'i (§10): qo'lda kirim/chiqim
 // + kunlik to'lov ortig'i − kunlik kamomad − jarima/zarar. Hech qachon saqlanmaydi,
@@ -30,10 +31,47 @@ export const transactionsForDriver = (driverId) =>
     .populate("createdBy", "fullName username")
     .sort({ createdAt: -1 });
 
+const COVER_LABEL = {
+  daily: "Kunlik ijara qoplandi",
+  fine: "Jarima qoplandi",
+  damage: "Zarar qoplandi",
+};
+
+// Depozit harakatlari (kirim/chiqim) + yugurib boruvchi depozit balansi. Avtomatik
+// qoplash chiqimlari "Kunlik ijara/Jarima/Zarar qoplandi" deb belgilanadi.
+export const depositLedger = async (driverId) => {
+  const txs = await DepositTransaction.find({ driver: driverId }).sort({ createdAt: 1 });
+  const reversedSet = new Set(txs.filter((t) => t.reverses).map((t) => String(t.reverses)));
+  let running = 0;
+  const entries = txs.map((t) => {
+    const amount = t.type === DEPOSIT_TX_TYPE.IN ? t.amount : -t.amount;
+    running += amount;
+    const label = t.coverage
+      ? COVER_LABEL[t.coverage.kind] || "Qoplash"
+      : t.type === DEPOSIT_TX_TYPE.IN
+        ? "Depozit kirim"
+        : "Depozit chiqim";
+    return {
+      txId: String(t._id),
+      date: t.coverage?.date || t.createdAt,
+      label,
+      note: t.note || "",
+      amount,
+      balance: running,
+      // Faqat qo'lda kirim/chiqim bekor qilinadi (avtomatik qoplash tizim tomonidan).
+      reversible: !t.auto && !t.reverses && !reversedSet.has(String(t._id)),
+    };
+  });
+  entries.reverse();
+  return entries;
+};
+
 export const detailForDriver = async (driverId) => {
+  // Ko'rishdan oldin mavjud depozit/keshbek bilan qarzlarni qoplaymiz (aniq tranzaksiyalar).
+  await settleDriver(driverId);
   const [acc, ledger] = await Promise.all([
     account.computeForDriver(driverId),
-    account.ledgerForDriver(driverId),
+    depositLedger(driverId),
   ]);
   return { balance: acc.available, debt: acc.debt, account: acc, ledger };
 };
@@ -74,6 +112,9 @@ export const createMovement = async (driverId, { type, amount, note }, currentUs
       throw new ApiError(409, "Chiqim mavjud balansdan oshib ketdi, qayta urinib ko'ring");
     }
   }
+
+  // Kirim bo'lsa — yangi mablag' bilan qarzlarni avtomatik qoplaymiz (§10).
+  if (type === DEPOSIT_TX_TYPE.IN) await settleDriver(driverId, currentUser._id);
   return { balance: await balanceForDriver(driverId) };
 };
 

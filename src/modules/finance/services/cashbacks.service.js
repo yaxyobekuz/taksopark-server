@@ -4,6 +4,7 @@ import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { monthsForDriver } from "./cashbackAccrual.service.js";
 import * as account from "./account.service.js";
+import { settleDriver } from "./settlement.service.js";
 
 const sod = (d) => startOfDayTashkent(d);
 
@@ -40,10 +41,11 @@ export const summaryAll = async () => {
 
 // Bitta haydovchining keshbek oylari + account qoldig'i bilan to'ldirilgan "available".
 export const detailForDriver = async (driverId) => {
+  await settleDriver(driverId);
   const [data, acc, ledger] = await Promise.all([
     monthsForDriver(driverId),
     account.computeForDriver(driverId),
-    account.ledgerForDriver(driverId),
+    cashbackLedger(driverId),
   ]);
   // Account qoldig'ini oylar bo'yicha (eng yangi oydan) taqsimlab "available" beramiz.
   let budget = acc.available;
@@ -66,6 +68,51 @@ export const transactionsForDriver = (driverId) =>
   CashbackTransaction.find({ driver: driverId })
     .populate("createdBy", "fullName username")
     .sort({ createdAt: -1 });
+
+const CB_COVER_LABEL = {
+  daily: "Kunlik ijara qoplandi",
+  fine: "Jarima qoplandi",
+  damage: "Zarar qoplandi",
+};
+
+// Keshbek harakatlari: hisoblangan (oylik +), berilgan/qoplangan (−), yugurib boruvchi qoldiq.
+export const cashbackLedger = async (driverId) => {
+  const [cb, txs] = await Promise.all([
+    monthsForDriver(driverId),
+    CashbackTransaction.find({ driver: driverId }).sort({ createdAt: 1 }),
+  ]);
+  const reversedSet = new Set(txs.filter((t) => t.reverses).map((t) => String(t.reverses)));
+  const entries = [];
+  for (const m of cb.months) {
+    if (m.accrued > 0)
+      entries.push({ date: m.isComplete ? m.monthEnd : new Date(), label: "Keshbek hisoblandi", note: "", amount: m.accrued });
+  }
+  for (const t of txs) {
+    const isReversal = t.type === CASHBACK_TX_TYPE.REVERSAL;
+    const amount = isReversal ? t.amount : -t.amount;
+    const label = isReversal
+      ? "Keshbek bekor qilindi"
+      : t.coverage
+        ? CB_COVER_LABEL[t.coverage.kind] || "Qoplandi"
+        : "Keshbek berildi";
+    entries.push({
+      txId: String(t._id),
+      date: t.coverage?.date || t.createdAt,
+      label,
+      note: t.note || "",
+      amount,
+      reversible: !t.auto && !isReversal && !reversedSet.has(String(t._id)),
+    });
+  }
+  entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  let running = 0;
+  for (const e of entries) {
+    running += e.amount;
+    e.balance = running;
+  }
+  entries.reverse();
+  return entries;
+};
 
 // Keshbek payout (avans). Oylik qoldiqdan VA umumiy hisob qoldig'idan oshmaydi.
 export const createPayout = async (driverId, { monthStart, amount, note }, currentUser) => {
