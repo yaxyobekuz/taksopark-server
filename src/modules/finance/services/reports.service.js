@@ -1,9 +1,11 @@
 import WorkPeriod from "../../../models/workPeriod.model.js";
-import { startOfDayTashkent, addMonths, addDays } from "../../../utils/timezone.js";
+import Transaction, { TX_TYPE } from "../../../models/transaction.model.js";
+import { startOfDayTashkent, addMonths, addDays, dateKeyTashkent } from "../../../utils/timezone.js";
 import { monthView } from "../../payments/services/dailyPlans.service.js";
 import * as cashbacks from "./cashbacks.service.js";
 import * as deposits from "./deposits.service.js";
 import * as account from "./account.service.js";
+import { settleDriver } from "./settlement.service.js";
 
 const monthBounds = (year, month) => {
   const monthStart = startOfDayTashkent(new Date(Date.UTC(year, month - 1, 1)));
@@ -62,6 +64,7 @@ export const dailyPlansForMonth = async ({ year, month }) => {
   const rows = [];
   const totals = { planTotal: 0, paidTotal: 0, debtTotal: 0 };
   for (const id of driverIds) {
+    await settleDriver(id);
     const { driver, plans } = await monthView({ driverId: id, year, month });
     for (const p of plans) {
       rows.push({
@@ -89,19 +92,54 @@ export const dailyPlansForMonth = async ({ year, month }) => {
   return { rows, totals };
 };
 
+// Kunlik to'lov pul oqimi: tanlangan oy, kun bo'yicha kirim (to'lov) va chiqim
+// (tuzatuvchi reversal). Kun bo'yicha — line chart uchun. Plan kuni (`date`) bo'yicha.
+export const dailyPaymentFlow = async ({ year, month }) => {
+  const { monthStart, monthEnd } = monthBounds(year, month);
+  const grouped = await Transaction.aggregate([
+    { $match: { date: { $gte: monthStart, $lte: monthEnd } } },
+    {
+      $group: {
+        _id: "$date",
+        income: { $sum: { $cond: [{ $eq: ["$type", TX_TYPE.PAYMENT] }, "$amount", 0] } },
+        expense: { $sum: { $cond: [{ $eq: ["$type", TX_TYPE.REVERSAL] }, "$amount", 0] } },
+      },
+    },
+  ]);
+  const byKey = new Map(
+    grouped.map((g) => [dateKeyTashkent(g._id), { income: g.income, expense: g.expense }]),
+  );
+
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const series = [];
+  const totals = { income: 0, expense: 0 };
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    const dayDate = startOfDayTashkent(new Date(Date.UTC(year, month - 1, d)));
+    const key = dateKeyTashkent(dayDate);
+    const v = byKey.get(key) || { income: 0, expense: 0 };
+    series.push({ dateKey: key, day: d, income: v.income, expense: v.expense });
+    totals.income += v.income;
+    totals.expense += v.expense;
+  }
+  return { series, totals };
+};
+
 // Hisobotlar sahifasi: tanlangan oy bo'yicha umumiy moliyaviy manzara.
 export const overview = async ({ year, month }) => {
   const allDriverIds = await WorkPeriod.distinct("driver", {});
-  const [payments, cashbackSummary, depositSummary, accTotals] = await Promise.all([
+  const [payments, cashbackSummary, depositSummary, accTotals, flow] = await Promise.all([
     dailyPaymentsSummary({ year, month }),
     cashbacks.summaryAll(),
     deposits.summaryAll(),
     account.totalsForDrivers(allDriverIds),
+    dailyPaymentFlow({ year, month }),
   ]);
 
   return {
     // Oylik (gross) — tanlangan oy uchun reja/to'langan.
     payments: payments.totals,
+    // Kunlik to'lov kirim/chiqim — oylik jami + kun bo'yicha seriya (chart).
+    flow,
     // NET qarz — depozit/keshbek bilan qoplangandan keyingi haqiqiy qarz (§10).
     netDebt: accTotals.debt,
     available: accTotals.available,
