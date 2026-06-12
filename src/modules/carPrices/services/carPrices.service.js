@@ -119,3 +119,19 @@ export const remove = async (id) => {
   await assertNoLinkedTransactions(period);
   await period.deleteOne();
 };
+
+// --- Derived holat (mashinalarni bezash uchun) ---
+
+// Bir nechta mashina uchun bugun faol bo'lgan narx davrini qaytaradi: Map<carId, period>.
+export const activePricesByCar = async (carIds) => {
+  if (!carIds.length) return new Map();
+  const today = startOfDayTashkent(new Date());
+  const periods = await CarPrice.find({
+    car: { $in: carIds },
+    startDate: { $lte: today },
+    $or: [{ endDate: null }, { endDate: { $gte: today } }],
+  });
+  const map = new Map();
+  for (const p of periods) map.set(String(p.car), p);
+  return map;
+};

@@ -4,8 +4,29 @@ import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { removeFileByUrl, fileToPublicUrl } from "../../../utils/fileStorage.js";
 import * as workPeriodsService from "../../workPeriods/services/workPeriods.service.js";
+import * as carPricesService from "../../carPrices/services/carPrices.service.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Mashinalar ro'yxatiga bugun faol narx davrini (DERIVED holat) biriktiradi.
+const attachActivePrices = async (cars) => {
+  const priceMap = await carPricesService.activePricesByCar(cars.map((c) => c._id));
+  return cars.map((car) => {
+    const obj = car.toJSON();
+    const active = priceMap.get(String(car._id));
+    obj.activePrice = active
+      ? {
+          _id: active._id,
+          dailyRateDeposit: active.dailyRateDeposit,
+          dailyRateCashback: active.dailyRateCashback,
+          monthlyCashback: active.monthlyCashback,
+          startDate: active.startDate,
+          endDate: active.endDate,
+        }
+      : null;
+    return obj;
+  });
+};
 
 const populateDocs = (q) =>
   q.populate("documents.documentType", "name").populate(
@@ -42,7 +63,7 @@ export const list = async ({ search, isActive, page = 1, limit = 20 }) => {
       .limit(limit),
     Car.countDocuments(filter),
   ]);
-  return { items, total };
+  return { items: await attachActivePrices(items), total };
 };
 
 export const getById = async (id) => {
