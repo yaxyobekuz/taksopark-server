@@ -37,6 +37,9 @@ export const PERMISSIONS = Object.freeze({
   DAMAGES_CREATE: "damages.create",
   DAMAGES_UPDATE: "damages.update",
   DAMAGES_DELETE: "damages.delete",
+
+  PAYMENTS_READ: "payments.read",
+  PAYMENTS_MANAGE: "payments.manage",
 });
 
 export const PERMISSION_LABELS = {
@@ -77,4 +80,7 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.DAMAGES_CREATE]: { label: "Zarar qo'shish", group: "damages" },
   [PERMISSIONS.DAMAGES_UPDATE]: { label: "Zararni tahrirlash", group: "damages" },
   [PERMISSIONS.DAMAGES_DELETE]: { label: "Zararni o'chirish", group: "damages" },
+
+  [PERMISSIONS.PAYMENTS_READ]: { label: "Kunlik to'lovlarni ko'rish", group: "payments" },
+  [PERMISSIONS.PAYMENTS_MANAGE]: { label: "Kunlik to'lovlarni boshqarish", group: "payments" },
 };

@@ -12,6 +12,8 @@ import workPeriodsRouter from "../modules/workPeriods/workPeriods.routes.js";
 import restdaysRouter from "../modules/restdays/restdays.routes.js";
 import finesRouter from "../modules/fines/fines.routes.js";
 import damagesRouter from "../modules/damages/damages.routes.js";
+import paymentsRouter from "../modules/payments/payments.routes.js";
+import financeRouter from "../modules/finance/finance.routes.js";
 
 const router = Router();
 
@@ -32,5 +34,7 @@ router.use("/work-periods", workPeriodsRouter);
 router.use("/rest-days", restdaysRouter);
 router.use("/fines", finesRouter);
 router.use("/damages", damagesRouter);
+router.use("/payments", paymentsRouter);
+router.use("/finance", financeRouter);
 
 export default router;
