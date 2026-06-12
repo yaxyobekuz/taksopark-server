@@ -6,7 +6,7 @@ import * as dailyPlansService from "../modules/payments/services/dailyPlans.serv
 export const JOB_NAME = "daily.materialize-daily-plans";
 
 // Har kuni bugun faol ish davri bor haydovchilar uchun kunlik planlarni
-// materializatsiya qiladi (so'nggi 7 kun — server uzilib qolsa bo'shliqni to'ldiradi).
+// materializatsiya qiladi (so'nggi 7 kun - server uzilib qolsa bo'shliqni to'ldiradi).
 // Bu kunlik plan HAQIQAT MANBASI bo'lib, ko'rilmasa ham qarz hisoblanib boradi.
 export default function defineMaterializeDailyPlans(agenda) {
   agenda.define(JOB_NAME, async () => {

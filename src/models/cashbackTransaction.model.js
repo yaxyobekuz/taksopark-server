@@ -5,10 +5,10 @@ export const CASHBACK_TX_TYPE = Object.freeze({
   REVERSAL: "reversal", // tuzatuvchi (xato payout'ni qaytaruvchi)
 });
 
-// Keshbek harakati — APPEND-ONLY (§9). Keshbek "hisoblangan summasi" SAQLANMAYDI —
+// Keshbek harakati - APPEND-ONLY (§9). Keshbek "hisoblangan summasi" SAQLANMAYDI -
 // u har doim kunlik plan snapshotlaridan (§8 kunlik ulush) DERIVED hisoblanadi.
 // Bu model faqat haydovchiga BERILGAN keshbekni (payout/avans) yozadi.
-// monthStart — qaysi keshbek oyidan olingani (anchor: keshbek davri boshidan oylar).
+// monthStart - qaysi keshbek oyidan olingani (anchor: keshbek davri boshidan oylar).
 const cashbackTransactionSchema = new mongoose.Schema(
   {
     driver: { type: mongoose.Schema.Types.ObjectId, ref: "Driver", required: true, index: true },

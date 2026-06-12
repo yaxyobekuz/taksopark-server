@@ -5,7 +5,7 @@ export const DEPOSIT_TX_TYPE = Object.freeze({
   OUT: "out", // depozitdan chiqim (yechib olindi / jarima qoplandi)
 });
 
-// Depozit harakati — APPEND-ONLY (§9). Depozit BALANSI saqlanmaydi — u har doim
+// Depozit harakati - APPEND-ONLY (§9). Depozit BALANSI saqlanmaydi - u har doim
 // shu tranzaksiyalardan DERIVED: balans = Σ(in) − Σ(out) (§10 ANTI-QOIDA).
 // Xato yozuvni tuzatish = teskari turdagi yangi yozuv (reverses bilan bog'lanadi).
 const depositTransactionSchema = new mongoose.Schema(

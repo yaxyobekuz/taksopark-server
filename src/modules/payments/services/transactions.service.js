@@ -3,7 +3,7 @@ import DailyPlan from "../../../models/dailyPlan.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { paidByPlan, getPlanById } from "./dailyPlans.service.js";
 
-// Plan uchun barcha tranzaksiyalar (audit izi — eskidan yangiga).
+// Plan uchun barcha tranzaksiyalar (audit izi - eskidan yangiga).
 export const listByPlan = async (dailyPlanId) => {
   const plan = await DailyPlan.findById(dailyPlanId);
   if (!plan) throw new ApiError(404, "Kunlik plan topilmadi");
@@ -28,12 +28,12 @@ export const listByDriver = async ({ driverId, fromDate, toDate, page = 1, limit
 };
 
 // Kunlik to'lov (yoki bo'lakli to'lov) qo'shish. Haydovchi bir planda bo'lib-bo'lib
-// to'lashi mumkin — har bo'lak ALOHIDA tranzaksiya (§9).
+// to'lashi mumkin - har bo'lak ALOHIDA tranzaksiya (§9).
 export const createPayment = async (dailyPlanId, { amount, note }, currentUser) => {
   const plan = await DailyPlan.findById(dailyPlanId);
   if (!plan) throw new ApiError(404, "Kunlik plan topilmadi");
 
-  // Dam olish kunida majburiyat yo'q — to'lov kiritib bo'lmaydi.
+  // Dam olish kunida majburiyat yo'q - to'lov kiritib bo'lmaydi.
   if (plan.isRestDay) {
     throw new ApiError(409, "Dam olish kunida to'lov kiritib bo'lmaydi");
   }
@@ -45,7 +45,7 @@ export const createPayment = async (dailyPlanId, { amount, note }, currentUser) 
     throw new ApiError(400, "To'lov summasi musbat bo'lishi kerak");
   }
 
-  // Ortiqcha to'lov hozircha qo'llab-quvvatlanmaydi (depozit/balans keyingi bosqich) —
+  // Ortiqcha to'lov hozircha qo'llab-quvvatlanmaydi (depozit/balans keyingi bosqich) -
   // shuning uchun to'lov o'sha kun qoldig'idan oshmasligi kerak. Bo'lib-bo'lib to'lash
   // saqlanadi: bir necha marta, lekin jami planAmount'dan oshmaydi.
   const paidMap = await paidByPlan([plan._id]);
@@ -72,8 +72,8 @@ export const createPayment = async (dailyPlanId, { amount, note }, currentUser) 
   return getPlanById(plan._id);
 };
 
-// Tuzatuvchi (teskari) tranzaksiya. Xato to'lovni o'chirmaymiz — teskari yozuv
-// qo'shamiz (append-only, audit izi saqlanadi — §9).
+// Tuzatuvchi (teskari) tranzaksiya. Xato to'lovni o'chirmaymiz - teskari yozuv
+// qo'shamiz (append-only, audit izi saqlanadi - §9).
 export const reverseTransaction = async (transactionId, { note }, currentUser) => {
   const original = await Transaction.findById(transactionId);
   if (!original) throw new ApiError(404, "Tranzaksiya topilmadi");

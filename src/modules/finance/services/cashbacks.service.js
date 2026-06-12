@@ -54,7 +54,7 @@ export const monthsForDriver = async (driverId) => {
   const periods = await WorkPeriod.find({ driver: driverId, tariff: TARIFF.CASHBACK }).sort({ startDate: 1 });
   if (!periods.length) return { driver, months: [], totals: { accrued: 0, paidOut: 0, available: 0 } };
 
-  // Kunlik planlar mavjudligini ta'minlaymiz (snapshot manbasi — §8).
+  // Kunlik planlar mavjudligini ta'minlaymiz (snapshot manbasi - §8).
   await ensureUpToToday(driverId, periods[0].startDate);
 
   const today = sod(new Date());
@@ -127,7 +127,7 @@ export const summaryAll = async () => {
   return { rows, totals };
 };
 
-// Keshbek payout (avans) — qoldiqdan oshmasligi kerak.
+// Keshbek payout (avans) - qoldiqdan oshmasligi kerak.
 export const createPayout = async (driverId, { monthStart, amount, note }, currentUser) => {
   const value = Number(amount);
   if (!Number.isFinite(value) || value <= 0) {

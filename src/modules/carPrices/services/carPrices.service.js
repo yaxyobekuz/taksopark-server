@@ -27,14 +27,14 @@ const assertNoConflict = (candidate, existing) => {
   }
 };
 
-// §5 referensial qulf — narx davriga bog'langan tranzaksiya bo'lsa uni
+// §5 referensial qulf - narx davriga bog'langan tranzaksiya bo'lsa uni
 // o'zgartirib/o'chirib bo'lmaydi (tranzaksiyali kunlik planlar manba).
 const assertNoLinkedTransactions = async (period) => {
   const range = await transactedRangeForCarPrice(period._id);
   if (range) {
     throw new ApiError(
       409,
-      "Bu narx davriga bog'langan to'lov(lar) mavjud — o'zgartirib yoki o'chirib bo'lmaydi",
+      "Bu narx davriga bog'langan to'lov(lar) mavjud - o'zgartirib yoki o'chirib bo'lmaydi",
     );
   }
 };
@@ -74,7 +74,7 @@ export const update = async (id, body) => {
   const period = await CarPrice.findById(id);
   if (!period) throw new ApiError(404, "Narx davri topilmadi");
 
-  // §3/§5: tranzaksiyali (muzlagan) kunlarga ega narx davri tahrirlanmaydi —
+  // §3/§5: tranzaksiyali (muzlagan) kunlarga ega narx davri tahrirlanmaydi -
   // o'zgarish o'tmishdagi hisobotni jimgina qayta yozmasligi kerak.
   await assertNoLinkedTransactions(period);
 

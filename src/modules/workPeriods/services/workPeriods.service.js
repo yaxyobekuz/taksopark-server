@@ -26,14 +26,14 @@ const assertNoConflict = (candidate, existing) => {
   }
 };
 
-// §5 referensial qulf — davrga bog'langan tranzaksiya bo'lsa tarifni o'zgartirib /
-// davrni o'chirib bo'lmaydi. Manba — tranzaksiyali kunlik planlar.
+// §5 referensial qulf - davrga bog'langan tranzaksiya bo'lsa tarifni o'zgartirib /
+// davrni o'chirib bo'lmaydi. Manba - tranzaksiyali kunlik planlar.
 const assertNoLinkedTransactions = async (period) => {
   const range = await transactedRangeForWorkPeriod(period._id);
   if (range) {
     throw new ApiError(
       409,
-      "Bu ish davriga bog'langan to'lov(lar) mavjud — o'zgartirib yoki o'chirib bo'lmaydi",
+      "Bu ish davriga bog'langan to'lov(lar) mavjud - o'zgartirib yoki o'chirib bo'lmaydi",
     );
   }
 };

@@ -1,18 +1,18 @@
 import mongoose from "mongoose";
 
-// Kunlik plan — bir haydovchi + bir kun uchun YAGONA model; o'sha kungi hisob-kitobning
+// Kunlik plan - bir haydovchi + bir kun uchun YAGONA model; o'sha kungi hisob-kitobning
 // HAQIQAT MANBASI (§1). O'sha kun amalda bo'lgan bog'liqliklar bu yerga SNAPSHOT qilinadi:
 // id (relation) + raw (qiymat nusxasi). Hisobot doim raw qiymatdan o'qiydi, jonli joindan EMAS.
 //
-// planAmount — o'sha kun uchun majburiyat (raw snapshot): dam olish kuni => 0,
+// planAmount - o'sha kun uchun majburiyat (raw snapshot): dam olish kuni => 0,
 //   aks holda o'sha kungi tarif bo'yicha kunlik narx.
-// To'langan summa va qarz bu modelda SAQLANMAYDI — ular tranzaksiyalardan DERIVED
-// hisoblanadi (§9, §10). priceMissing — o'sha kunga narx davri topilmagani.
+// To'langan summa va qarz bu modelda SAQLANMAYDI - ular tranzaksiyalardan DERIVED
+// hisoblanadi (§9, §10). priceMissing - o'sha kunga narx davri topilmagani.
 const dailyPlanSchema = new mongoose.Schema(
   {
     driver: { type: mongoose.Schema.Types.ObjectId, ref: "Driver", required: true, index: true },
     date: { type: Date, required: true },
-    // Tashkent kuni "YYYY-MM-DD" — TZ siljishidan himoyalangan unikal kalit.
+    // Tashkent kuni "YYYY-MM-DD" - TZ siljishidan himoyalangan unikal kalit.
     dateKey: { type: String, required: true },
 
     // --- Ish davri snapshot ---

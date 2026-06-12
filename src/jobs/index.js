@@ -14,7 +14,7 @@ export const startJobs = async () => {
   await agenda.start();
 
   await agenda.every("0 3 * * *", CLEANUP_JOB);
-  // Har kuni — bugun faol haydovchilar uchun kunlik planlarni materializatsiya qilish.
+  // Har kuni - bugun faol haydovchilar uchun kunlik planlarni materializatsiya qilish.
   await agenda.every("0 1 * * *", MATERIALIZE_JOB);
 
   logger.info("Agenda ishga tushirildi");

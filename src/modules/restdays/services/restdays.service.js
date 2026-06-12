@@ -40,7 +40,7 @@ export const create = async (body, currentUser) => {
 
   // Kunlik to'lov qilingan kunni dam olish deb belgilab bo'lmaydi.
   if (await hasTransactionsOnDate(driver._id, date)) {
-    throw new ApiError(409, "Bu kun uchun to'lov mavjud — dam olish kuni deb belgilab bo'lmaydi");
+    throw new ApiError(409, "Bu kun uchun to'lov mavjud - dam olish kuni deb belgilab bo'lmaydi");
   }
 
   let restDay;

@@ -3,7 +3,7 @@ import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 
-// Balans = Σ(in) − Σ(out). Hech qachon saqlanmaydi — har doim DERIVED (§10).
+// Balans = Σ(in) − Σ(out). Hech qachon saqlanmaydi - har doim DERIVED (§10).
 export const balanceMap = async (driverIds) => {
   const map = new Map();
   if (!driverIds.length) return map;

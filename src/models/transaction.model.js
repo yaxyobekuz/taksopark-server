@@ -9,7 +9,7 @@ export const TX_TYPE = Object.freeze({
 });
 
 // Bitta pul harakati = bitta yozuv. APPEND-ONLY: yaratilgach o'zgartirilmaydi va
-// o'chirilmaydi (§9). Xato bo'lsa — teskari (reversal) tranzaksiya qo'shiladi.
+// o'chirilmaydi (§9). Xato bo'lsa - teskari (reversal) tranzaksiya qo'shiladi.
 // Kunlik planga BOG'LANADI (1 plan : N tranzaksiya). Kun uchun "to'langan summa" =
 // shu planga bog'langan tranzaksiyalar yig'indisi (payment − reversal).
 const transactionSchema = new mongoose.Schema(
@@ -22,7 +22,7 @@ const transactionSchema = new mongoose.Schema(
     type: { type: String, enum: Object.values(TX_TYPE), required: true },
     amount: { type: Number, required: true, min: 0 }, // doim musbat; effekt turdan kelib chiqadi
 
-    // reversal bo'lsa — qaysi tranzaksiyani tuzatayotgani (audit izi).
+    // reversal bo'lsa - qaysi tranzaksiyani tuzatayotgani (audit izi).
     reverses: { type: mongoose.Schema.Types.ObjectId, ref: "Transaction", default: null },
 
     note: { type: String, default: "" },

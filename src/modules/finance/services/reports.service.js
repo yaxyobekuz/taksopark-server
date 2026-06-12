@@ -53,7 +53,7 @@ export const dailyPaymentsSummary = async ({ year, month }) => {
 };
 
 // Umumiy "Kunlik to'lovlar" sahifasi: tanlangan oydagi HAR BIR kunlik plan
-// (haydovchi + kun) — reja/to'langan/qarz bilan. Oylik jami emas, kunma-kun.
+// (haydovchi + kun) - reja/to'langan/qarz bilan. Oylik jami emas, kunma-kun.
 export const dailyPlansForMonth = async ({ year, month }) => {
   const { monthStart, monthEnd } = monthBounds(year, month);
   const driverIds = await driversWithWorkInMonth(monthStart, monthEnd);
