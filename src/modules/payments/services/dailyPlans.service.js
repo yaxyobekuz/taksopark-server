@@ -136,11 +136,13 @@ const ensureRange = async ({ driver, fromDate, toDate }) => {
   const existingByKey = new Map(existing.map((p) => [p.dateKey, p]));
 
   const ops = [];
+  const coveredKeys = new Set();
   let cursor = fromDate;
   while (cursor.getTime() <= end.getTime()) {
     const snap = buildSnapshot({ driver, dayDate: cursor, periods, assignments, prices, carById, restByKey });
     const dateKey = dateKeyTashkent(cursor);
     if (snap) {
+      coveredKeys.add(dateKey);
       const current = existingByKey.get(dateKey);
       if (!current) {
         ops.push({ insertOne: { document: snap } });
@@ -152,6 +154,15 @@ const ensureRange = async ({ driver, fromDate, toDate }) => {
       }
     }
     cursor = startOfDayTashkent(addDays(cursor, 1));
+  }
+
+  // Endi hech qaysi ish davriga tushmaydigan (qamralmagan) muzlamagan planlarni
+  // o'chiramiz — ish davri qisqartirilsa/o'chirilsa soxta reja/qarz qolmasligi uchun.
+  // Muzlagan (tranzaksiyali) plan kuni referensial qulf tufayli davrdan chiqarilolmaydi.
+  for (const p of existing) {
+    if (!coveredKeys.has(p.dateKey) && !frozen.has(String(p._id))) {
+      ops.push({ deleteOne: { filter: { _id: p._id } } });
+    }
   }
 
   if (ops.length) {
