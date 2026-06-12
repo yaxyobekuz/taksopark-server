@@ -2,6 +2,7 @@ import CarPrice from "../../../models/carPrice.model.js";
 import Car from "../../../models/car.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
+import { transactedRangeForCarPrice } from "../../payments/services/dailyPlans.service.js";
 
 const POSITIVE_INFINITY = Number.POSITIVE_INFINITY;
 
@@ -26,12 +27,16 @@ const assertNoConflict = (candidate, existing) => {
   }
 };
 
-// §5 referensial qulf - davrga bog'langan moliyaviy yozuv (kunlik plan/tranzaksiya)
-// bo'lsa narx davrini o'zgartirib/o'chirib bo'lmaydi. Moliya moduli hali yo'q;
-// tayyor bo'lganda shu yerda tekshiriladi.
-// eslint-disable-next-line no-unused-vars
-const assertNoLinkedTransactions = async (_period) => {
-  // TODO(moliya): kunlik plan / tranzaksiya bog'langan bo'lsa ApiError(409) tashlash.
+// §5 referensial qulf — narx davriga bog'langan tranzaksiya bo'lsa uni
+// o'zgartirib/o'chirib bo'lmaydi (tranzaksiyali kunlik planlar manba).
+const assertNoLinkedTransactions = async (period) => {
+  const range = await transactedRangeForCarPrice(period._id);
+  if (range) {
+    throw new ApiError(
+      409,
+      "Bu narx davriga bog'langan to'lov(lar) mavjud — o'zgartirib yoki o'chirib bo'lmaydi",
+    );
+  }
 };
 
 export const list = async (carId) => {
@@ -68,6 +73,10 @@ export const create = async (carId, body, currentUser) => {
 export const update = async (id, body) => {
   const period = await CarPrice.findById(id);
   if (!period) throw new ApiError(404, "Narx davri topilmadi");
+
+  // §3/§5: tranzaksiyali (muzlagan) kunlarga ega narx davri tahrirlanmaydi —
+  // o'zgarish o'tmishdagi hisobotni jimgina qayta yozmasligi kerak.
+  await assertNoLinkedTransactions(period);
 
   const nextStart =
     body.startDate !== undefined

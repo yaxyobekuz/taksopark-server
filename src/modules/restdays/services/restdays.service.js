@@ -2,6 +2,7 @@ import RestDay from "../../../models/restDay.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent, addDays, addMonths, endOfDayTashkent, dateKeyTashkent } from "../../../utils/timezone.js";
+import { hasTransactionsOnDate, syncDay } from "../../payments/services/dailyPlans.service.js";
 
 export const isRestDay = async (driverId, date) => {
   const day = startOfDayTashkent(date);
@@ -37,8 +38,14 @@ export const create = async (body, currentUser) => {
 
   const date = startOfDayTashkent(body.date);
 
+  // Kunlik to'lov qilingan kunni dam olish deb belgilab bo'lmaydi.
+  if (await hasTransactionsOnDate(driver._id, date)) {
+    throw new ApiError(409, "Bu kun uchun to'lov mavjud — dam olish kuni deb belgilab bo'lmaydi");
+  }
+
+  let restDay;
   try {
-    return await RestDay.create({
+    restDay = await RestDay.create({
       driver: driver._id,
       car: driver.car,
       date,
@@ -51,12 +58,19 @@ export const create = async (body, currentUser) => {
     }
     throw e;
   }
+
+  // Kunlik plan dam olish kuniga sinxronlanadi (majburiyat 0 bo'ladi).
+  await syncDay(driver._id, date);
+  return restDay;
 };
 
 export const remove = async (id) => {
   const restDay = await RestDay.findById(id);
   if (!restDay) throw new ApiError(404, "Dam olish kuni topilmadi");
+  const { driver, date } = restDay;
   await restDay.deleteOne();
+  // Plan ish kuniga qaytadi (majburiyat o'sha kungi narxdan tiklanadi).
+  await syncDay(driver, date);
 };
 
 // Tanlangan oyning har bir kuni uchun dam olish belgisini qaytaradi.

@@ -2,6 +2,7 @@ import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
+import { transactedRangeForWorkPeriod } from "../../payments/services/dailyPlans.service.js";
 
 const POSITIVE_INFINITY = Number.POSITIVE_INFINITY;
 
@@ -25,11 +26,16 @@ const assertNoConflict = (candidate, existing) => {
   }
 };
 
-// §5 referensial qulf - davrga bog'langan moliyaviy yozuv bo'lsa o'zgartirib/
-// o'chirib bo'lmaydi. Moliya moduli hali yo'q; tayyor bo'lganda shu yerda tekshiriladi.
-// eslint-disable-next-line no-unused-vars
-const assertNoLinkedTransactions = async (_period) => {
-  // TODO(moliya): kunlik plan / tranzaksiya bog'langan bo'lsa ApiError(409) tashlash.
+// §5 referensial qulf — davrga bog'langan tranzaksiya bo'lsa tarifni o'zgartirib /
+// davrni o'chirib bo'lmaydi. Manba — tranzaksiyali kunlik planlar.
+const assertNoLinkedTransactions = async (period) => {
+  const range = await transactedRangeForWorkPeriod(period._id);
+  if (range) {
+    throw new ApiError(
+      409,
+      "Bu ish davriga bog'langan to'lov(lar) mavjud — o'zgartirib yoki o'chirib bo'lmaydi",
+    );
+  }
 };
 
 export const list = async (driverId) => {
@@ -91,6 +97,20 @@ export const update = async (id, body) => {
   if (datesChanged) {
     const others = await WorkPeriod.find({ driver: period.driver, _id: { $ne: period._id } });
     assertNoConflict({ startDate: nextStart, endDate: nextEnd }, others);
+
+    // §5: tranzaksiyali kun davr oralig'idan tashqarida qolib ketmasin.
+    const range = await transactedRangeForWorkPeriod(period._id);
+    if (range) {
+      const outOfRange =
+        nextStart.getTime() > range.min.getTime() ||
+        (nextEnd && nextEnd.getTime() < range.max.getTime());
+      if (outOfRange) {
+        throw new ApiError(
+          409,
+          "Sana oralig'ini o'zgartirib bo'lmaydi: to'lov qilingan kunlar davrdan tashqarida qoladi",
+        );
+      }
+    }
   }
 
   period.startDate = nextStart;
