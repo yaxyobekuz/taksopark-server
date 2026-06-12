@@ -11,9 +11,10 @@ export const PERMISSIONS = Object.freeze({
   DRIVERS_READ: "drivers.read",
   DRIVERS_CREATE: "drivers.create",
   DRIVERS_UPDATE: "drivers.update",
-  DRIVERS_DELETE: "drivers.delete",
-  DRIVERS_END_TRIAL: "drivers.end_trial",
   DRIVERS_DOCUMENTS_MANAGE: "drivers.documents.manage",
+
+  WORK_PERIODS_READ: "work_periods.read",
+  WORK_PERIODS_MANAGE: "work_periods.manage",
 
   REST_DAYS_READ: "rest_days.read",
   REST_DAYS_MANAGE: "rest_days.manage",
@@ -23,6 +24,9 @@ export const PERMISSIONS = Object.freeze({
   CARS_UPDATE: "cars.update",
   CARS_DELETE: "cars.delete",
   CARS_DOCUMENTS_MANAGE: "cars.documents.manage",
+
+  CAR_PRICES_READ: "car_prices.read",
+  CAR_PRICES_MANAGE: "car_prices.manage",
 
   FINES_READ: "fines.read",
   FINES_CREATE: "fines.create",
@@ -47,9 +51,10 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.DRIVERS_READ]: { label: "Haydovchilarni ko'rish", group: "drivers" },
   [PERMISSIONS.DRIVERS_CREATE]: { label: "Haydovchi qo'shish", group: "drivers" },
   [PERMISSIONS.DRIVERS_UPDATE]: { label: "Haydovchini tahrirlash", group: "drivers" },
-  [PERMISSIONS.DRIVERS_DELETE]: { label: "Haydovchini o'chirish", group: "drivers" },
-  [PERMISSIONS.DRIVERS_END_TRIAL]: { label: "Sinov muddatini tugatish", group: "drivers" },
   [PERMISSIONS.DRIVERS_DOCUMENTS_MANAGE]: { label: "Haydovchi hujjat turlarini boshqarish", group: "drivers" },
+
+  [PERMISSIONS.WORK_PERIODS_READ]: { label: "Ish davrlarini ko'rish", group: "work_periods" },
+  [PERMISSIONS.WORK_PERIODS_MANAGE]: { label: "Ish davrlarini boshqarish", group: "work_periods" },
 
   [PERMISSIONS.REST_DAYS_READ]: { label: "Dam olish kunlarini ko'rish", group: "rest_days" },
   [PERMISSIONS.REST_DAYS_MANAGE]: { label: "Dam olish kunlarini boshqarish", group: "rest_days" },
@@ -59,6 +64,9 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.CARS_UPDATE]: { label: "Mashinani tahrirlash", group: "cars" },
   [PERMISSIONS.CARS_DELETE]: { label: "Mashinani o'chirish", group: "cars" },
   [PERMISSIONS.CARS_DOCUMENTS_MANAGE]: { label: "Mashina hujjat turlarini boshqarish", group: "cars" },
+
+  [PERMISSIONS.CAR_PRICES_READ]: { label: "Mashina narxlarini ko'rish", group: "cars" },
+  [PERMISSIONS.CAR_PRICES_MANAGE]: { label: "Mashina narxlarini boshqarish", group: "cars" },
 
   [PERMISSIONS.FINES_READ]: { label: "Jarimalarni ko'rish", group: "fines" },
   [PERMISSIONS.FINES_CREATE]: { label: "Jarima qo'shish", group: "fines" },

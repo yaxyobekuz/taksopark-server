@@ -2,7 +2,8 @@ import "dotenv/config";
 import { connectDB, disconnectDB } from "../config/db.js";
 import User from "../models/user.model.js";
 import Car from "../models/car.model.js";
-import Driver, { DRIVER_STATUS } from "../models/driver.model.js";
+import Driver from "../models/driver.model.js";
+import WorkPeriod, { TARIFF } from "../models/workPeriod.model.js";
 import Fine from "../models/fine.model.js";
 import Damage from "../models/damage.model.js";
 import RestDay from "../models/restDay.model.js";
@@ -16,6 +17,7 @@ const seed = async () => {
   await Promise.all([
     Car.deleteMany({}),
     Driver.deleteMany({}),
+    WorkPeriod.deleteMany({}),
     Fine.deleteMany({}),
     Damage.deleteMany({}),
     RestDay.deleteMany({}),
@@ -44,8 +46,6 @@ const seed = async () => {
       lastName: "Valiyev",
       phone: "+998901111111",
       car: cars[0]._id,
-      startDate: daysAgo(10),
-      status: DRIVER_STATUS.ACTIVE,
       notes: "Tajribali",
     },
     {
@@ -53,8 +53,6 @@ const seed = async () => {
       lastName: "Karimov",
       phone: "+998902222222",
       car: cars[1]._id,
-      startDate: daysAgo(3),
-      status: DRIVER_STATUS.ACTIVE,
       notes: "Yangi",
     },
     {
@@ -62,8 +60,6 @@ const seed = async () => {
       lastName: "Yusupov",
       phone: "+998903333333",
       car: cars[2]._id,
-      startDate: daysAgo(20),
-      status: DRIVER_STATUS.ACTIVE,
       notes: "",
     },
     {
@@ -71,8 +67,6 @@ const seed = async () => {
       lastName: "Salimov",
       phone: "+998904444444",
       car: cars[3]._id,
-      startDate: daysAgo(30),
-      status: DRIVER_STATUS.ACTIVE,
       notes: "",
     },
   ]);
@@ -82,6 +76,18 @@ const seed = async () => {
   await Promise.all(
     drivers.map((d) => Car.updateOne({ _id: d.car }, { $set: { currentDriver: d._id } })),
   );
+
+  // Ish davrlari - ish boshlash sanasi shu davrlardan kelib chiqadi.
+  // Davron (drivers[2]) - eski yopilgan davr + yangi ochiq davr (tarif almashgan).
+  await WorkPeriod.insertMany([
+    { driver: drivers[0]._id, tariff: TARIFF.DEPOSIT, startDate: daysAgo(10), endDate: null, createdBy: owner._id },
+    { driver: drivers[1]._id, tariff: TARIFF.CASHBACK, startDate: daysAgo(3), endDate: null, createdBy: owner._id },
+    { driver: drivers[2]._id, tariff: TARIFF.DEPOSIT, startDate: daysAgo(40), endDate: daysAgo(21), createdBy: owner._id },
+    { driver: drivers[2]._id, tariff: TARIFF.CASHBACK, startDate: daysAgo(20), endDate: null, createdBy: owner._id },
+    // Eldor (drivers[3]) - yopilgan davr, hozir ishlamayotgan.
+    { driver: drivers[3]._id, tariff: TARIFF.DEPOSIT, startDate: daysAgo(30), endDate: daysAgo(5), createdBy: owner._id },
+  ]);
+  logger.info("Ish davrlari yaratildi");
 
   // Fake attachment (haqiqiy fayl yo'q, faqat metadata)
   const fakeAttachment = {
