@@ -45,18 +45,8 @@ export const createPayment = async (dailyPlanId, { amount, note }, currentUser) 
     throw new ApiError(400, "To'lov summasi musbat bo'lishi kerak");
   }
 
-  // Ortiqcha to'lov hozircha qo'llab-quvvatlanmaydi (depozit/balans keyingi bosqich) -
-  // shuning uchun to'lov o'sha kun qoldig'idan oshmasligi kerak. Bo'lib-bo'lib to'lash
-  // saqlanadi: bir necha marta, lekin jami planAmount'dan oshmaydi.
-  const paidMap = await paidByPlan([plan._id]);
-  const alreadyPaid = paidMap.get(String(plan._id)) || 0;
-  const remaining = (plan.planAmount || 0) - alreadyPaid;
-  if (remaining <= 0) {
-    throw new ApiError(409, "Bu kun uchun to'lov to'liq amalga oshirilgan");
-  }
-  if (value > remaining) {
-    throw new ApiError(409, `To'lov qoldiq qarzdan (${remaining}) oshmasligi kerak`);
-  }
+  // Ortiqcha to'lov endi qabul qilinadi — o'sha kun rejasidan oshgan qism haydovchi
+  // hisobiga (depozit/balans) tushadi (§10). Bo'lib-bo'lib to'lash ham saqlanadi.
 
   await Transaction.create({
     dailyPlan: plan._id,
