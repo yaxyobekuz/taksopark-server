@@ -4,6 +4,9 @@ import User from "../models/user.model.js";
 import Car from "../models/car.model.js";
 import Driver from "../models/driver.model.js";
 import WorkPeriod, { TARIFF } from "../models/workPeriod.model.js";
+import CarPrice from "../models/carPrice.model.js";
+import DailyPlan from "../models/dailyPlan.model.js";
+import Transaction from "../models/transaction.model.js";
 import Fine from "../models/fine.model.js";
 import Damage from "../models/damage.model.js";
 import RestDay from "../models/restDay.model.js";
@@ -18,6 +21,9 @@ const seed = async () => {
     Car.deleteMany({}),
     Driver.deleteMany({}),
     WorkPeriod.deleteMany({}),
+    CarPrice.deleteMany({}),
+    DailyPlan.deleteMany({}),
+    Transaction.deleteMany({}),
     Fine.deleteMany({}),
     Damage.deleteMany({}),
     RestDay.deleteMany({}),
@@ -88,6 +94,15 @@ const seed = async () => {
     { driver: drivers[3]._id, tariff: TARIFF.DEPOSIT, startDate: daysAgo(30), endDate: daysAgo(5), createdBy: owner._id },
   ]);
   logger.info("Ish davrlari yaratildi");
+
+  // Mashina narx davrlari (ochiq) — kunlik planlar shu narxlardan snapshot oladi.
+  await CarPrice.insertMany([
+    { car: cars[0]._id, dailyRateDeposit: 80000, dailyRateCashback: 100000, monthlyCashback: 500000, startDate: daysAgo(60), endDate: null, createdBy: owner._id },
+    { car: cars[1]._id, dailyRateDeposit: 70000, dailyRateCashback: 90000, monthlyCashback: 450000, startDate: daysAgo(60), endDate: null, createdBy: owner._id },
+    { car: cars[2]._id, dailyRateDeposit: 75000, dailyRateCashback: 95000, monthlyCashback: 480000, startDate: daysAgo(60), endDate: null, createdBy: owner._id },
+    { car: cars[3]._id, dailyRateDeposit: 60000, dailyRateCashback: 80000, monthlyCashback: 400000, startDate: daysAgo(60), endDate: null, createdBy: owner._id },
+  ]);
+  logger.info("Mashina narx davrlari yaratildi");
 
   // Fake attachment (haqiqiy fayl yo'q, faqat metadata)
   const fakeAttachment = {
