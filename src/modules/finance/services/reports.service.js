@@ -3,6 +3,7 @@ import { startOfDayTashkent, addMonths, addDays } from "../../../utils/timezone.
 import { monthView } from "../../payments/services/dailyPlans.service.js";
 import * as cashbacks from "./cashbacks.service.js";
 import * as deposits from "./deposits.service.js";
+import * as account from "./account.service.js";
 
 const monthBounds = (year, month) => {
   const monthStart = startOfDayTashkent(new Date(Date.UTC(year, month - 1, 1)));
@@ -90,14 +91,20 @@ export const dailyPlansForMonth = async ({ year, month }) => {
 
 // Hisobotlar sahifasi: tanlangan oy bo'yicha umumiy moliyaviy manzara.
 export const overview = async ({ year, month }) => {
-  const [payments, cashbackSummary, depositSummary] = await Promise.all([
+  const allDriverIds = await WorkPeriod.distinct("driver", {});
+  const [payments, cashbackSummary, depositSummary, accTotals] = await Promise.all([
     dailyPaymentsSummary({ year, month }),
     cashbacks.summaryAll(),
     deposits.summaryAll(),
+    account.totalsForDrivers(allDriverIds),
   ]);
 
   return {
+    // Oylik (gross) — tanlangan oy uchun reja/to'langan.
     payments: payments.totals,
+    // NET qarz — depozit/keshbek bilan qoplangandan keyingi haqiqiy qarz (§10).
+    netDebt: accTotals.debt,
+    available: accTotals.available,
     cashback: cashbackSummary.totals,
     deposit: { total: depositSummary.total },
     driverCount: payments.rows.length,

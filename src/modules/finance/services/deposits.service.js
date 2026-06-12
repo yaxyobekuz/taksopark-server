@@ -2,42 +2,27 @@ import DepositTransaction, { DEPOSIT_TX_TYPE } from "../../../models/depositTran
 import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
+import * as account from "./account.service.js";
 
-// Balans = Σ(in) − Σ(out). Hech qachon saqlanmaydi - har doim DERIVED (§10).
-export const balanceMap = async (driverIds) => {
-  const map = new Map();
-  if (!driverIds.length) return map;
-  const rows = await DepositTransaction.aggregate([
-    { $match: { driver: { $in: driverIds } } },
-    {
-      $group: {
-        _id: "$driver",
-        inSum: { $sum: { $cond: [{ $eq: ["$type", DEPOSIT_TX_TYPE.IN] }, "$amount", 0] } },
-        outSum: { $sum: { $cond: [{ $eq: ["$type", DEPOSIT_TX_TYPE.OUT] }, "$amount", 0] } },
-      },
-    },
-  ]);
-  for (const r of rows) map.set(String(r._id), r.inSum - r.outSum);
-  return map;
-};
+// Depozit balansi = haydovchining UMUMIY hisob qoldig'i (§10): qo'lda kirim/chiqim
+// + kunlik to'lov ortig'i − kunlik kamomad − jarima/zarar. Hech qachon saqlanmaydi,
+// har doim manbalardan DERIVED.
 
-export const balanceForDriver = async (driverId) => {
-  const map = await balanceMap([driverId]);
-  return map.get(String(driverId)) || 0;
-};
+export const balanceForDriver = async (driverId) => account.availableForDriver(driverId);
 
-// Umumiy sahifa: depozitli davri bor barcha haydovchilar + balanslar.
+// Umumiy sahifa: depozitli davri bor barcha haydovchilar + balans/qarz.
 export const summaryAll = async () => {
   const driverIds = await WorkPeriod.distinct("driver", { tariff: TARIFF.DEPOSIT });
-  const [drivers, balances] = await Promise.all([
-    Driver.find({ _id: { $in: driverIds } }).select("firstName lastName phone"),
-    balanceMap(driverIds),
-  ]);
-  const rows = drivers
-    .map((d) => ({ driver: d, balance: balances.get(String(d._id)) || 0 }))
-    .sort((a, b) => b.balance - a.balance);
+  const drivers = await Driver.find({ _id: { $in: driverIds } }).select("firstName lastName phone");
+  const rows = [];
+  for (const d of drivers) {
+    const acc = await account.computeForDriver(d._id);
+    rows.push({ driver: d, balance: acc.available, debt: acc.debt });
+  }
+  rows.sort((a, b) => b.balance - a.balance);
   const total = rows.reduce((sum, r) => sum + r.balance, 0);
-  return { rows, total };
+  const totalDebt = rows.reduce((sum, r) => sum + r.debt, 0);
+  return { rows, total, totalDebt };
 };
 
 export const transactionsForDriver = (driverId) =>
@@ -45,7 +30,15 @@ export const transactionsForDriver = (driverId) =>
     .populate("createdBy", "fullName username")
     .sort({ createdAt: -1 });
 
-// Depozit harakati (kirim / chiqim). Chiqim balansdan oshmaydi.
+export const detailForDriver = async (driverId) => {
+  const [acc, ledger] = await Promise.all([
+    account.computeForDriver(driverId),
+    account.ledgerForDriver(driverId),
+  ]);
+  return { balance: acc.available, debt: acc.debt, account: acc, ledger };
+};
+
+// Depozit harakati (kirim / chiqim). Chiqim umumiy hisob qoldig'idan oshmaydi.
 export const createMovement = async (driverId, { type, amount, note }, currentUser) => {
   const driver = await Driver.findById(driverId);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
@@ -56,19 +49,31 @@ export const createMovement = async (driverId, { type, amount, note }, currentUs
   if (!Number.isFinite(value) || value <= 0) {
     throw new ApiError(400, "Summa musbat bo'lishi kerak");
   }
+
   if (type === DEPOSIT_TX_TYPE.OUT) {
-    const balance = await balanceForDriver(driverId);
-    if (value > balance) {
-      throw new ApiError(409, `Chiqim mavjud balansdan (${balance}) oshmasligi kerak`);
+    const available = await account.availableForDriver(driverId);
+    if (value > available) {
+      throw new ApiError(409, `Chiqim mavjud balansdan (${available}) oshmasligi kerak`);
     }
   }
-  await DepositTransaction.create({
+
+  const created = await DepositTransaction.create({
     driver: driverId,
     type,
     amount: value,
     note: note || "",
     createdBy: currentUser._id,
   });
+
+  // Konkurensiya himoyasi (§8 audit): chiqimdan keyin qoldiq manfiyga tushsa
+  // (bir vaqtda ikki chiqim), yangi yozuvni qaytarib olamiz.
+  if (type === DEPOSIT_TX_TYPE.OUT) {
+    const acc = await account.computeForDriver(driverId);
+    if (acc.net < 0) {
+      await created.deleteOne();
+      throw new ApiError(409, "Chiqim mavjud balansdan oshib ketdi, qayta urinib ko'ring");
+    }
+  }
   return { balance: await balanceForDriver(driverId) };
 };
 
@@ -81,7 +86,6 @@ export const reverseMovement = async (transactionId, currentUser) => {
   const already = await DepositTransaction.exists({ reverses: original._id });
   if (already) throw new ApiError(409, "Bu tranzaksiya allaqachon bekor qilingan");
 
-  // Teskari turdagi yozuv qo'shiladi (in <-> out), eski yozuv izga qoladi (§9).
   const opposite = original.type === DEPOSIT_TX_TYPE.IN ? DEPOSIT_TX_TYPE.OUT : DEPOSIT_TX_TYPE.IN;
   await DepositTransaction.create({
     driver: original.driver,

@@ -7,11 +7,8 @@ export const depositsList = asyncHandler(async (_req, res) => {
 });
 
 export const depositDriver = asyncHandler(async (req, res) => {
-  const [transactions, balance] = await Promise.all([
-    deposits.transactionsForDriver(req.params.driverId),
-    deposits.balanceForDriver(req.params.driverId),
-  ]);
-  res.json({ success: true, data: { balance, transactions } });
+  const data = await deposits.detailForDriver(req.params.driverId);
+  res.json({ success: true, data });
 });
 
 export const depositMovement = asyncHandler(async (req, res) => {

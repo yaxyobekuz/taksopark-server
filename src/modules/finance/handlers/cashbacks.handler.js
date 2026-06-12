@@ -7,11 +7,11 @@ export const cashbacksList = asyncHandler(async (_req, res) => {
 });
 
 export const cashbackDriver = asyncHandler(async (req, res) => {
-  const [months, transactions] = await Promise.all([
-    cashbacks.monthsForDriver(req.params.driverId),
+  const [detail, transactions] = await Promise.all([
+    cashbacks.detailForDriver(req.params.driverId),
     cashbacks.transactionsForDriver(req.params.driverId),
   ]);
-  res.json({ success: true, data: { ...months, transactions } });
+  res.json({ success: true, data: { ...detail, transactions } });
 });
 
 export const cashbackPayout = asyncHandler(async (req, res) => {
