@@ -8,6 +8,7 @@ import { ensureUpToToday } from "../../payments/services/dailyPlans.service.js";
 import * as workPeriods from "../../workPeriods/services/workPeriods.service.js";
 import * as cashbackAccrual from "./cashbackAccrual.service.js";
 import { coverageByRef } from "./settlement.service.js";
+import { toObjectId } from "../../../utils/objectId.js";
 
 const sumMap = (m) => [...m.values()].reduce((s, v) => s + v, 0);
 
@@ -22,7 +23,7 @@ const sumMap = (m) => [...m.values()].reduce((s, v) => s + v, 0);
 //   account < 0  → qarz = −account (depozit/keshbek qoplay olmagani)
 const sumAmount = async (Model, driverId) => {
   const r = await Model.aggregate([
-    { $match: { driver: driverId } },
+    { $match: { driver: toObjectId(driverId) } },
     { $group: { _id: null, sum: { $sum: "$amount" } } },
   ]);
   return r[0]?.sum || 0;
@@ -30,7 +31,7 @@ const sumAmount = async (Model, driverId) => {
 
 const signedSum = async (Model, driverId, plusType, minusType) => {
   const r = await Model.aggregate([
-    { $match: { driver: driverId } },
+    { $match: { driver: toObjectId(driverId) } },
     {
       $group: {
         _id: null,
@@ -50,7 +51,7 @@ export const computeForDriver = async (driverId) => {
   const [dailyAgg, pay, dep, cbTx, finesTotal, damagesTotal, accrual, finesCov, damagesCov] =
     await Promise.all([
       DailyPlan.aggregate([
-        { $match: { driver: driverId } },
+        { $match: { driver: toObjectId(driverId) } },
         { $group: { _id: null, sum: { $sum: "$planAmount" } } },
       ]),
       signedSum(Transaction, driverId, TX_TYPE.PAYMENT, TX_TYPE.REVERSAL),
