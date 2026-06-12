@@ -2,6 +2,7 @@ import Damage from "../../../models/damage.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
+import { settleDriver } from "../../finance/services/settlement.service.js";
 
 export const list = async ({ driverId, carId, fromDate, toDate, page = 1, limit = 20 }) => {
   const filter = {};
@@ -43,7 +44,7 @@ export const create = async (body, attachments, currentUser) => {
 
   const incidentDate = startOfDayTashkent(body.incidentDate);
 
-  return Damage.create({
+  const damage = await Damage.create({
     driver: driver._id,
     car: driver.car,
     amount: body.amount,
@@ -52,6 +53,9 @@ export const create = async (body, attachments, currentUser) => {
     createdBy: currentUser._id,
     note: body.note || "",
   });
+  // Zarar depozit/keshbekdan qoplanishi mumkin (§10) — settlement.
+  await settleDriver(driver._id, currentUser._id);
+  return damage;
 };
 
 export const update = async (id, body) => {

@@ -2,6 +2,7 @@ import logger from "../config/logger.js";
 import { startOfDayTashkent, addDays } from "../utils/timezone.js";
 import * as workPeriodsService from "../modules/workPeriods/services/workPeriods.service.js";
 import * as dailyPlansService from "../modules/payments/services/dailyPlans.service.js";
+import { settleDriver } from "../modules/finance/services/settlement.service.js";
 
 export const JOB_NAME = "daily.materialize-daily-plans";
 
@@ -18,6 +19,8 @@ export default function defineMaterializeDailyPlans(agenda) {
     for (const driverId of driverIds) {
       try {
         await dailyPlansService.ensureUpToToday(driverId, from);
+        // Yangi kunlar uchun depozit/keshbek bilan avtomatik qoplash (§10).
+        await settleDriver(driverId);
         count += 1;
       } catch (err) {
         logger.error({ err, driverId }, "Kunlik plan materializatsiyasi xato");
