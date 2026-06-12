@@ -1,11 +1,27 @@
-import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
+import Driver from "../../../models/driver.model.js";
 import Car from "../../../models/car.model.js";
 import DriverDocumentType from "../../../models/driverDocumentType.model.js";
 import ApiError from "../../../utils/ApiError.js";
-import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { removeFileByUrl, fileToPublicUrl } from "../../../utils/fileStorage.js";
+import * as workPeriodsService from "../../workPeriods/services/workPeriods.service.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Haydovchining HOLAT ustuni (Ishda/Ishlamayotgan, joriy tarif) - har doim
+// ish davrlaridan DERIVED hisoblanadi, hech qachon saqlanmaydi (§11A).
+const decorateDriver = (driver, activePeriod, extra = {}) => {
+  const obj = typeof driver.toJSON === "function" ? driver.toJSON() : driver;
+  obj.currentPeriod = activePeriod
+    ? {
+        _id: activePeriod._id,
+        tariff: activePeriod.tariff,
+        startDate: activePeriod.startDate,
+        endDate: activePeriod.endDate,
+      }
+    : null;
+  obj.workStatus = obj.currentPeriod ? "working" : "idle";
+  return { ...obj, ...extra };
+};
 
 const detachCarFromDriver = async (driver) => {
   if (driver.car) {
@@ -17,13 +33,12 @@ const attachCarToDriver = async (driver, carId) => {
   const car = await Car.findById(carId);
   if (!car) throw new ApiError(404, "Mashina topilmadi");
   if (!car.isActive) throw new ApiError(409, "Mashina faol emas");
-  const existingActive = await Driver.findOne({
+  const existing = await Driver.findOne({
     car: carId,
-    status: DRIVER_STATUS.ACTIVE,
     _id: { $ne: driver._id },
   });
-  if (existingActive) {
-    throw new ApiError(409, "Bu mashina boshqa faol haydovchiga biriktirilgan");
+  if (existing) {
+    throw new ApiError(409, "Bu mashina boshqa haydovchiga biriktirilgan");
   }
   driver.car = carId;
   await Car.updateOne({ _id: carId }, { $set: { currentDriver: driver._id } });
@@ -31,12 +46,18 @@ const attachCarToDriver = async (driver, carId) => {
 
 export const list = async ({ status, carId, search, page = 1, limit = 20 }) => {
   const filter = {};
-  if (status) filter.status = status;
   if (carId) filter.car = carId;
   if (search && search.trim()) {
     const rx = new RegExp(escapeRegex(search.trim()), "i");
     filter.$or = [{ firstName: rx }, { lastName: rx }, { phone: rx }];
   }
+
+  // Ishda/Ishlamayotgan - bugun faol ish davri bor/yo'qligidan kelib chiqadi.
+  if (status === "working" || status === "idle") {
+    const workingIds = await workPeriodsService.workingDriverIds();
+    filter._id = status === "working" ? { $in: workingIds } : { $nin: workingIds };
+  }
+
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
     Driver.find(filter)
@@ -46,7 +67,10 @@ export const list = async ({ status, carId, search, page = 1, limit = 20 }) => {
       .limit(limit),
     Driver.countDocuments(filter),
   ]);
-  return { items, total };
+
+  const activeMap = await workPeriodsService.activePeriodsByDriver(items.map((d) => d._id));
+  const decorated = items.map((d) => decorateDriver(d, activeMap.get(String(d._id))));
+  return { items: decorated, total };
 };
 
 export const getById = async (id) => {
@@ -54,7 +78,9 @@ export const getById = async (id) => {
     .populate("car", "plateNumber model photoUrl notes isActive")
     .populate("documents.documentType", "name");
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  return driver;
+  const activeMap = await workPeriodsService.activePeriodsByDriver([driver._id]);
+  const firstWorkDate = await workPeriodsService.firstStartDate(driver._id);
+  return decorateDriver(driver, activeMap.get(String(driver._id)), { firstWorkDate });
 };
 
 export const create = async (body) => {
@@ -64,7 +90,6 @@ export const create = async (body) => {
     firstName: body.firstName,
     lastName: body.lastName,
     phone: body.phone,
-    startDate: startOfDayTashkent(body.startDate),
     notes: body.notes || "",
     photoUrl: body.photoUrl || "",
   });
@@ -104,22 +129,6 @@ export const update = async (id, body) => {
   }
   await driver.save();
   if (oldPhotoUrl) removeFileByUrl(oldPhotoUrl);
-  return driver;
-};
-
-export const softRemove = async (id, { endDate } = {}) => {
-  const driver = await Driver.findById(id);
-  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  if (!endDate) throw new ApiError(400, "Ishni tugatish sanasi kerak");
-  const end = startOfDayTashkent(endDate);
-  if (end < startOfDayTashkent(driver.startDate)) {
-    throw new ApiError(409, "Ishni tugatish sanasi ish boshlash sanasidan oldin bo'lishi mumkin emas");
-  }
-  await detachCarFromDriver(driver);
-  driver.car = null;
-  driver.status = DRIVER_STATUS.ARCHIVED;
-  driver.endDate = end;
-  await driver.save();
   return driver;
 };
 

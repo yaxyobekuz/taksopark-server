@@ -1,10 +1,5 @@
 import mongoose from "mongoose";
 
-export const DRIVER_STATUS = Object.freeze({
-  ACTIVE: "active",
-  ARCHIVED: "archived",
-});
-
 const driverDocumentFileSchema = new mongoose.Schema(
   {
     url: { type: String, required: true },
@@ -36,15 +31,6 @@ const driverSchema = new mongoose.Schema(
     photoUrl: { type: String, default: "" },
 
     car: { type: mongoose.Schema.Types.ObjectId, ref: "Car", default: null, index: true },
-    startDate: { type: Date, required: true },
-    endDate: { type: Date, default: null },
-
-    status: {
-      type: String,
-      enum: Object.values(DRIVER_STATUS),
-      default: DRIVER_STATUS.ACTIVE,
-      index: true,
-    },
 
     notes: { type: String, default: "" },
     documents: { type: [driverDocumentSchema], default: [] },

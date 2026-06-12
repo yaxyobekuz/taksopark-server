@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { DRIVER_STATUS } from "../../../models/driver.model.js";
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, "ID noto'g'ri");
 
@@ -13,18 +12,9 @@ export const idSchema = z.object({
   params: z.object({ id: objectId }),
 });
 
-export const removeSchema = z.object({
-  params: z.object({ id: objectId }),
-  body: z.object({
-    endDate: z
-      .string()
-      .refine((s) => !Number.isNaN(new Date(s).getTime()), "Ishni tugatish sanasi noto'g'ri"),
-  }),
-});
-
 export const listSchema = z.object({
   query: z.object({
-    status: z.enum(Object.values(DRIVER_STATUS)).optional(),
+    status: z.enum(["working", "idle"]).optional(),
     carId: objectId.optional(),
     search: z.string().optional(),
     page: z.coerce.number().int().min(1).optional(),
@@ -38,7 +28,6 @@ export const createSchema = z.object({
     lastName: z.string().trim().default(""),
     phone: z.string().trim().min(7, "Telefon raqami kerak"),
     carId: optionalCarId,
-    startDate: z.string().refine((s) => !Number.isNaN(new Date(s).getTime()), "Sana noto'g'ri"),
     notes: z.string().optional(),
   }),
 });

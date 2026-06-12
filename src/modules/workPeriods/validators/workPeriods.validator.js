@@ -1,0 +1,41 @@
+import { z } from "zod";
+import { TARIFF } from "../../../models/workPeriod.model.js";
+
+const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, "ID noto'g'ri");
+
+const dateString = z
+  .string()
+  .refine((s) => !Number.isNaN(new Date(s).getTime()), "Sana noto'g'ri");
+
+const optionalEndDate = z.preprocess(
+  (v) => (v === "" || v == null ? null : v),
+  dateString.nullable().optional(),
+);
+
+export const listSchema = z.object({
+  query: z.object({ driverId: objectId }),
+});
+
+export const idSchema = z.object({
+  params: z.object({ id: objectId }),
+});
+
+export const createSchema = z.object({
+  body: z.object({
+    driverId: objectId,
+    tariff: z.enum(Object.values(TARIFF)),
+    startDate: dateString,
+    endDate: optionalEndDate,
+    note: z.string().optional(),
+  }),
+});
+
+export const updateSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    tariff: z.enum(Object.values(TARIFF)).optional(),
+    startDate: dateString.optional(),
+    endDate: optionalEndDate,
+    note: z.string().optional(),
+  }),
+});
