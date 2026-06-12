@@ -10,8 +10,10 @@ export const JOB_NAME = "daily.materialize-daily-plans";
 // Bu kunlik plan HAQIQAT MANBASI bo'lib, ko'rilmasa ham qarz hisoblanib boradi.
 export default function defineMaterializeDailyPlans(agenda) {
   agenda.define(JOB_NAME, async () => {
-    const driverIds = await workPeriodsService.workingDriverIds();
     const from = startOfDayTashkent(addDays(new Date(), -7));
+    // Bugun ishlamasa ham, so'nggi 7 kunda faol bo'lgan haydovchilarni qamraymiz
+    // (yaqinda to'xtagan haydovchining oxirgi kunlari ham materializatsiya bo'lsin).
+    const driverIds = await workPeriodsService.driverIdsActiveSince(from);
     let count = 0;
     for (const driverId of driverIds) {
       try {
