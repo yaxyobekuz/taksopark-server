@@ -4,8 +4,15 @@ import mongoose from "mongoose";
 // Kelajakda kengayadi: depozitga/balansga ortiqcha, depozitdan yechish, keshbek,
 // jarima/zarar qoplash, qarz va h.k. (§9, §10).
 export const TX_TYPE = Object.freeze({
-  PAYMENT: "payment", // kunlik to'lov (haydovchidan)
+  PAYMENT: "payment", // kunlik to'lov
   REVERSAL: "reversal", // tuzatuvchi (xato to'lovni teskari qaytaruvchi)
+});
+
+// To'lov manbasi: haydovchi naqd berdi / depozitdan / keshbekdan qoplandi (§10).
+export const TX_SOURCE = Object.freeze({
+  DRIVER: "driver",
+  DEPOSIT: "deposit",
+  CASHBACK: "cashback",
 });
 
 // Bitta pul harakati = bitta yozuv. APPEND-ONLY: yaratilgach o'zgartirilmaydi va
@@ -20,13 +27,14 @@ const transactionSchema = new mongoose.Schema(
     date: { type: Date, required: true }, // plan kuni (Tashkent start-of-day)
 
     type: { type: String, enum: Object.values(TX_TYPE), required: true },
+    source: { type: String, enum: Object.values(TX_SOURCE), default: TX_SOURCE.DRIVER },
     amount: { type: Number, required: true, min: 0 }, // doim musbat; effekt turdan kelib chiqadi
 
     // reversal bo'lsa - qaysi tranzaksiyani tuzatayotgani (audit izi).
     reverses: { type: mongoose.Schema.Types.ObjectId, ref: "Transaction", default: null },
 
     note: { type: String, default: "" },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   },
   { timestamps: true },
 );
