@@ -11,8 +11,8 @@ const sod = (d) => startOfDayTashkent(d);
 export { monthsForDriver };
 
 // Umumiy sahifa: keshbek davri bor barcha haydovchilar + jami.
-// "available" — to'lash mumkin bo'lgan keshbek = oylik qoldiq, lekin haydovchining
-// umumiy hisob qoldig'idan (account) oshmaydi (qarzga to'lab bo'lmaydi — §10).
+// "available" - to'lash mumkin bo'lgan keshbek = oylik qoldiq, lekin haydovchining
+// umumiy hisob qoldig'idan (account) oshmaydi (qarzga to'lab bo'lmaydi - §10).
 export const summaryAll = async () => {
   const driverIds = await WorkPeriod.distinct("driver", { tariff: TARIFF.CASHBACK });
   const rows = [];

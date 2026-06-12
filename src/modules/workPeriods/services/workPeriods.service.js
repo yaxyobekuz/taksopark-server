@@ -154,7 +154,7 @@ export const workingDriverIds = async () => {
 };
 
 // Berilgan sanadan beri ish davri faol bo'lgan haydovchi id'lari (materializatsiya
-// jobi uchun — bugun ishlamasa ham, yaqinda to'xtagan kunlari ham hisoblansin).
+// jobi uchun - bugun ishlamasa ham, yaqinda to'xtagan kunlari ham hisoblansin).
 export const driverIdsActiveSince = async (fromDate) => {
   const today = startOfDayTashkent(new Date());
   return WorkPeriod.distinct("driver", {

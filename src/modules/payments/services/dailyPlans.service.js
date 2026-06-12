@@ -157,7 +157,7 @@ const ensureRange = async ({ driver, fromDate, toDate }) => {
   }
 
   // Endi hech qaysi ish davriga tushmaydigan (qamralmagan) muzlamagan planlarni
-  // o'chiramiz — ish davri qisqartirilsa/o'chirilsa soxta reja/qarz qolmasligi uchun.
+  // o'chiramiz - ish davri qisqartirilsa/o'chirilsa soxta reja/qarz qolmasligi uchun.
   // Muzlagan (tranzaksiyali) plan kuni referensial qulf tufayli davrdan chiqarilolmaydi.
   for (const p of existing) {
     if (!coveredKeys.has(p.dateKey) && !frozen.has(String(p._id))) {

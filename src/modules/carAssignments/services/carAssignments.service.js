@@ -173,10 +173,10 @@ export const changeCar = async (driverId, { carId, fromDate }, currentUser) => {
   const from = fromDate ? sod(fromDate) : sod(new Date());
 
   // §5 referensial qulf: almashtirish sanasidan boshlab to'lov qilingan kunlar bo'lsa,
-  // o'sha kunlarning mashinasi o'zgarib ketadi — bunga yo'l qo'ymaymiz.
+  // o'sha kunlarning mashinasi o'zgarib ketadi - bunga yo'l qo'ymaymiz.
   const txRange = await transactedRangeForDriverInRange(driverId, from, sod(new Date()));
   if (txRange) {
-    throw new ApiError(409, "Almashtirish sanasidan keyin to'lov qilingan kunlar bor — mashinani almashtirib bo'lmaydi");
+    throw new ApiError(409, "Almashtirish sanasidan keyin to'lov qilingan kunlar bor - mashinani almashtirib bo'lmaydi");
   }
 
   const open = await CarAssignment.findOne({ driver: driverId, endDate: null });

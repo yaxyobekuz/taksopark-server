@@ -27,7 +27,7 @@ const seed = async () => {
   await connectDB();
 
   const owner = await User.findOne({ role: "owner" });
-  if (!owner) throw new Error("Owner topilmadi — avval reset/owner seed ishga tushiring");
+  if (!owner) throw new Error("Owner topilmadi - avval reset/owner seed ishga tushiring");
 
   // Eski biznes data tozalanadi (qayta ishga tushirishda dublikat bo'lmasligi uchun).
   await Promise.all([

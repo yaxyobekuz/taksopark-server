@@ -9,7 +9,7 @@ export const CASHBACK_TX_TYPE = Object.freeze({
 // u har doim kunlik plan snapshotlaridan (§8 kunlik ulush) DERIVED hisoblanadi.
 // Bu model faqat haydovchiga BERILGAN keshbekni (payout/avans) yozadi.
 // monthStart - qaysi keshbek oyidan olingani (anchor: keshbek davri boshidan oylar).
-// coverage — payout avtomatik qaysi majburiyatni qoplaganini ko'rsatadi (kunlik/jarima/zarar).
+// coverage - payout avtomatik qaysi majburiyatni qoplaganini ko'rsatadi (kunlik/jarima/zarar).
 // Qo'lda berilgan keshbekda coverage=null, auto=false.
 const cbCoverageSchema = new mongoose.Schema(
   {

@@ -113,7 +113,7 @@ export const createMovement = async (driverId, { type, amount, note }, currentUs
     }
   }
 
-  // Kirim bo'lsa — yangi mablag' bilan qarzlarni avtomatik qoplaymiz (§10).
+  // Kirim bo'lsa - yangi mablag' bilan qarzlarni avtomatik qoplaymiz (§10).
   if (type === DEPOSIT_TX_TYPE.IN) await settleDriver(driverId, currentUser._id);
   return { balance: await balanceForDriver(driverId) };
 };

@@ -7,7 +7,7 @@ import { startOfDayTashkent, addMonths, addDays, daysBetween } from "../../../ut
 import { ensureUpToToday } from "../../payments/services/dailyPlans.service.js";
 
 // §8 keshbek hisobi (FAQAT O'QISH). Bu modul account.service'dan ham, cashbacks
-// (payout) servisidan ham ishlatiladi — tsiklni oldini olish uchun alohida.
+// (payout) servisidan ham ishlatiladi - tsiklni oldini olish uchun alohida.
 
 const sod = (d) => startOfDayTashkent(d);
 

@@ -11,7 +11,7 @@ import { toObjectId } from "../../../utils/objectId.js";
 
 // §10 QOPLASH (settlement): haydovchining qoplanmagan majburiyatlarini (eng eskidan)
 // mavjud DEPOZIT, so'ng KESHBEK bilan avtomatik yopadi. Har qoplash AYNIQ yoziladi:
-//   - manbadan chiqim (depozit "out" / keshbek "payout") — coverage refi bilan
+//   - manbadan chiqim (depozit "out" / keshbek "payout") - coverage refi bilan
 //   - kunlik plan uchun esa o'sha kun planiga "to'lov" (source: deposit/cashback)
 // Shu tariqa qaysi qarz qaysi manbadan, qachon qoplangani aniq ko'rinadi (§9).
 
@@ -156,10 +156,10 @@ const settleDriverImpl = async (driverId, userId = null) => {
 
 // Concurrency himoyasi: settleDriver ko'p joydan (depozit kirim, sahifa o'qish,
 // kunlik job) bir vaqtda chaqiriladi. Himoyasiz bo'lsa parallel ishlashlar bir xil
-// qarzni qayta qoplab DUBLIKAT (yoki yarim) qoplash yaratadi — depozit ledger buziladi.
+// qarzni qayta qoplab DUBLIKAT (yoki yarim) qoplash yaratadi - depozit ledger buziladi.
 // Shu sababli HAR HAYDOVCHI uchun ketma-ket (per-driver mutex) ishlatamiz: parallel
 // chaqiruvlar navbatga turadi, birinchisi hammasini qoplaydi, qolganlari idempotent
-// no-op bo'ladi. (Bitta Node jarayoni — Agenda ham shu jarayonda, demak in-process
+// no-op bo'ladi. (Bitta Node jarayoni - Agenda ham shu jarayonda, demak in-process
 // lock yetarli; bir necha jarayonga o'tilsa, DB-asosli lock kerak bo'ladi.)
 const settleLocks = new Map();
 

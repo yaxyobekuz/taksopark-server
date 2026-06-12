@@ -12,7 +12,7 @@ import { toObjectId } from "../../../utils/objectId.js";
 
 const sumMap = (m) => [...m.values()].reduce((s, v) => s + v, 0);
 
-// Haydovchining YAGONA moliyaviy hisobi (§10). Hech narsa saqlanmaydi — barchasi
+// Haydovchining YAGONA moliyaviy hisobi (§10). Hech narsa saqlanmaydi - barchasi
 // manbalardan (kunlik plan, to'lov, depozit, keshbek, jarima, zarar) DERIVED.
 //
 //   account = KREDIT − DEBET
@@ -70,7 +70,7 @@ export const computeForDriver = async (driverId) => {
   const depositOut = dep.minus;
   const cashbackAccrued = accrual;
   const cashbackPayout = cbTx.plus - cbTx.minus;
-  // Jarima/zarar — qoplanmagan qismi (qoplangani depozit/keshbek chiqimida hisoblangan).
+  // Jarima/zarar - qoplanmagan qismi (qoplangani depozit/keshbek chiqimida hisoblangan).
   const fines = finesTotal - sumMap(finesCov);
   const damages = damagesTotal - sumMap(damagesCov);
 
@@ -111,8 +111,8 @@ export const totalsForDrivers = async (driverIds) => {
   return totals;
 };
 
-// To'liq harakatlar tarixi (statement): balansga ta'sir qilgan HAR BIR yozuv —
-// kunlik ijara, to'lov, jarima, zarar, depozit kirim/chiqim, keshbek — sana bo'yicha
+// To'liq harakatlar tarixi (statement): balansga ta'sir qilgan HAR BIR yozuv -
+// kunlik ijara, to'lov, jarima, zarar, depozit kirim/chiqim, keshbek - sana bo'yicha
 // tartiblangan, yugurib boruvchi balans bilan. "Nima uchun qarz/balans shunday" savoliga javob.
 export const ledgerForDriver = async (driverId) => {
   const firstWork = await workPeriods.firstStartDate(driverId);

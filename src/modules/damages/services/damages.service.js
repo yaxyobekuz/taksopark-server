@@ -53,7 +53,7 @@ export const create = async (body, attachments, currentUser) => {
     createdBy: currentUser._id,
     note: body.note || "",
   });
-  // Zarar depozit/keshbekdan qoplanishi mumkin (§10) — settlement.
+  // Zarar depozit/keshbekdan qoplanishi mumkin (§10) - settlement.
   await settleDriver(driver._id, currentUser._id);
   return damage;
 };

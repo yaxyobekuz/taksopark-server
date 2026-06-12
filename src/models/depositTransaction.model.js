@@ -8,7 +8,7 @@ export const DEPOSIT_TX_TYPE = Object.freeze({
 // Depozit harakati - APPEND-ONLY (§9). Depozit BALANSI saqlanmaydi - u har doim
 // shu tranzaksiyalardan DERIVED: balans = Σ(in) − Σ(out) (§10 ANTI-QOIDA).
 // Xato yozuvni tuzatish = teskari turdagi yangi yozuv (reverses bilan bog'lanadi).
-// coverage — chiqim avtomatik qaysi majburiyatni qoplaganini ko'rsatadi (kunlik/jarima/zarar).
+// coverage - chiqim avtomatik qaysi majburiyatni qoplaganini ko'rsatadi (kunlik/jarima/zarar).
 // Qo'lda kirim/chiqimda coverage=null, auto=false.
 const coverageSchema = new mongoose.Schema(
   {
