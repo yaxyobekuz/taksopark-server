@@ -8,22 +8,25 @@ import * as carPricesService from "../../carPrices/services/carPrices.service.js
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Faol narx davridan ro'yxat/detalda ko'rsatiladigan yengil nusxa.
+const pickActivePrice = (period) =>
+  period
+    ? {
+        _id: period._id,
+        dailyRateDeposit: period.dailyRateDeposit,
+        dailyRateCashback: period.dailyRateCashback,
+        monthlyCashback: period.monthlyCashback,
+        startDate: period.startDate,
+        endDate: period.endDate,
+      }
+    : null;
+
 // Mashinalar ro'yxatiga bugun faol narx davrini (DERIVED holat) biriktiradi.
 const attachActivePrices = async (cars) => {
   const priceMap = await carPricesService.activePricesByCar(cars.map((c) => c._id));
   return cars.map((car) => {
     const obj = car.toJSON();
-    const active = priceMap.get(String(car._id));
-    obj.activePrice = active
-      ? {
-          _id: active._id,
-          dailyRateDeposit: active.dailyRateDeposit,
-          dailyRateCashback: active.dailyRateCashback,
-          monthlyCashback: active.monthlyCashback,
-          startDate: active.startDate,
-          endDate: active.endDate,
-        }
-      : null;
+    obj.activePrice = pickActivePrice(priceMap.get(String(car._id)));
     return obj;
   });
 };
@@ -69,7 +72,11 @@ export const list = async ({ search, isActive, page = 1, limit = 20 }) => {
 export const getById = async (id) => {
   const car = await populateDocs(Car.findById(id));
   if (!car) throw new ApiError(404, "Mashina topilmadi");
-  return decorateCarDriver(car);
+  const decorated = await decorateCarDriver(car);
+  const obj = typeof decorated.toJSON === "function" ? decorated.toJSON() : decorated;
+  const priceMap = await carPricesService.activePricesByCar([obj._id]);
+  obj.activePrice = pickActivePrice(priceMap.get(String(obj._id)));
+  return obj;
 };
 
 export const create = async (body) => {
