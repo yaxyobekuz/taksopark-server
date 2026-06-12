@@ -1,9 +1,10 @@
 import Driver from "../../../models/driver.model.js";
-import Car from "../../../models/car.model.js";
 import DriverDocumentType from "../../../models/driverDocumentType.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { removeFileByUrl, fileToPublicUrl } from "../../../utils/fileStorage.js";
+import { startOfDayTashkent } from "../../../utils/timezone.js";
 import * as workPeriodsService from "../../workPeriods/services/workPeriods.service.js";
+import * as carAssignmentsService from "../../carAssignments/services/carAssignments.service.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -21,27 +22,6 @@ const decorateDriver = (driver, activePeriod, extra = {}) => {
     : null;
   obj.workStatus = obj.currentPeriod ? "working" : "idle";
   return { ...obj, ...extra };
-};
-
-const detachCarFromDriver = async (driver) => {
-  if (driver.car) {
-    await Car.updateOne({ _id: driver.car }, { $set: { currentDriver: null } });
-  }
-};
-
-const attachCarToDriver = async (driver, carId) => {
-  const car = await Car.findById(carId);
-  if (!car) throw new ApiError(404, "Mashina topilmadi");
-  if (!car.isActive) throw new ApiError(409, "Mashina faol emas");
-  const existing = await Driver.findOne({
-    car: carId,
-    _id: { $ne: driver._id },
-  });
-  if (existing) {
-    throw new ApiError(409, "Bu mashina boshqa haydovchiga biriktirilgan");
-  }
-  driver.car = carId;
-  await Car.updateOne({ _id: carId }, { $set: { currentDriver: driver._id } });
 };
 
 export const list = async ({ status, carId, search, page = 1, limit = 20 }) => {
@@ -83,7 +63,7 @@ export const getById = async (id) => {
   return decorateDriver(driver, activeMap.get(String(driver._id)), { firstWorkDate });
 };
 
-export const create = async (body) => {
+export const create = async (body, currentUser) => {
   const exists = await Driver.findOne({ phone: body.phone });
   if (exists) throw new ApiError(409, "Bu telefon raqamli haydovchi mavjud");
   const driver = new Driver({
@@ -93,11 +73,18 @@ export const create = async (body) => {
     notes: body.notes || "",
     photoUrl: body.photoUrl || "",
   });
-  if (body.carId) {
-    await attachCarToDriver(driver, body.carId);
-  }
   await driver.save();
-  return driver;
+
+  // Mashina tanlangan bo'lsa - bugundan ochiq biriktirish yaratiladi (§2).
+  // Sana/tarixni keyin "Mashina biriktirish" tabida tahrirlash mumkin.
+  if (body.carId && currentUser) {
+    await carAssignmentsService.create(
+      driver._id,
+      { carId: body.carId, startDate: startOfDayTashkent(new Date()) },
+      currentUser,
+    );
+  }
+  return Driver.findById(driver._id).populate("car", "plateNumber model photoUrl notes isActive");
 };
 
 export const update = async (id, body) => {
@@ -118,15 +105,7 @@ export const update = async (id, body) => {
     driver.photoUrl = body.photoUrl;
   }
 
-  if (body.carId !== undefined) {
-    if (body.carId === null) {
-      await detachCarFromDriver(driver);
-      driver.car = null;
-    } else if (String(driver.car) !== String(body.carId)) {
-      await detachCarFromDriver(driver);
-      await attachCarToDriver(driver, body.carId);
-    }
-  }
+  // Mashina (driver.car) - endi tayinlash davrlaridan boshqariladi; bu yerda emas.
   await driver.save();
   if (oldPhotoUrl) removeFileByUrl(oldPhotoUrl);
   return driver;

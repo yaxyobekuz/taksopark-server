@@ -2,6 +2,8 @@ import DailyPlan from "../../../models/dailyPlan.model.js";
 import Transaction, { TX_TYPE } from "../../../models/transaction.model.js";
 import WorkPeriod from "../../../models/workPeriod.model.js";
 import CarPrice from "../../../models/carPrice.model.js";
+import CarAssignment from "../../../models/carAssignment.model.js";
+import Car from "../../../models/car.model.js";
 import RestDay from "../../../models/restDay.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
@@ -26,18 +28,24 @@ const rateForTariff = (carPrice, tariff) => {
 };
 
 // In-memory massivlardan o'sha kun uchun snapshotni yig'adi (DB'ga yozmaydi).
-const buildSnapshot = ({ driver, dayDate, periods, prices, restByKey }) => {
+// Mashina o'sha kungi TAYINLASH davridan olinadi (§2), driver.car (joriy) dan EMAS -
+// shu sababli o'tmishdagi kunlar o'sha kungi haqiqiy mashinada qoladi.
+const buildSnapshot = ({ driver, dayDate, periods, assignments, prices, carById, restByKey }) => {
   const t = dayDate.getTime();
   const period = periods.find((p) => coversDay(p, t));
   if (!period) return null; // bu kun hech qaysi ish davriga tushmaydi
 
   const tariff = period.tariff;
-  const car = driver.car || null;
-  const carPrice = car ? prices.find((pr) => coversDay(pr, t)) || null : null;
+  const assignment = assignments.find((a) => coversDay(a, t)) || null;
+  const carId = assignment ? assignment.car : null;
+  const carDoc = carId ? carById.get(String(carId)) || null : null;
+  const carPrice = carId
+    ? prices.find((pr) => String(pr.car) === String(carId) && coversDay(pr, t)) || null
+    : null;
   const dateKey = dateKeyTashkent(dayDate);
   const restDay = restByKey.get(dateKey) || null;
   const isRestDay = !!restDay;
-  const priceMissing = !car || !carPrice;
+  const priceMissing = !carId || !carPrice;
   const dailyRate = rateForTariff(carPrice, tariff);
   const planAmount = isRestDay || priceMissing ? 0 : dailyRate;
 
@@ -47,8 +55,8 @@ const buildSnapshot = ({ driver, dayDate, periods, prices, restByKey }) => {
     dateKey,
     workPeriod: period._id,
     tariff,
-    car: car?._id || null,
-    carSnapshot: { plateNumber: car?.plateNumber || "", model: car?.model || "" },
+    car: carId || null,
+    carSnapshot: { plateNumber: carDoc?.plateNumber || "", model: carDoc?.model || "" },
     carPrice: carPrice?._id || null,
     dailyRate,
     monthlyCashback: carPrice?.monthlyCashback || 0,
@@ -90,7 +98,7 @@ const decoratePlan = (plan, paid) => {
   return obj;
 };
 
-// Tranzaksiyali plan MUZLAGAN (§1) — snapshotini jimgina qayta yozmaymiz.
+// Tranzaksiyali plan MUZLAGAN (§1) - snapshotini jimgina qayta yozmaymiz.
 const frozenPlanIds = async (driverId, fromDate, toDate) => {
   const ids = await Transaction.distinct("dailyPlan", {
     driver: driverId,
@@ -106,12 +114,19 @@ const ensureRange = async ({ driver, fromDate, toDate }) => {
   const end = toDate.getTime() > today.getTime() ? today : toDate;
   if (fromDate.getTime() > end.getTime()) return;
 
-  const [periods, prices, restDays, frozen] = await Promise.all([
+  const [periods, assignments, restDays, frozen] = await Promise.all([
     WorkPeriod.find({ driver: driver._id }),
-    driver.car ? CarPrice.find({ car: driver.car._id }) : Promise.resolve([]),
+    CarAssignment.find({ driver: driver._id }),
     RestDay.find({ driver: driver._id, date: { $gte: fromDate, $lte: end } }),
     frozenPlanIds(driver._id, fromDate, end),
   ]);
+  // Tayinlangan barcha mashinalarning narxlari va ma'lumotlari (kun bo'yicha snapshot uchun).
+  const carIds = [...new Set(assignments.map((a) => String(a.car)))];
+  const [prices, cars] = await Promise.all([
+    carIds.length ? CarPrice.find({ car: { $in: carIds } }) : Promise.resolve([]),
+    carIds.length ? Car.find({ _id: { $in: carIds } }).select("plateNumber model") : Promise.resolve([]),
+  ]);
+  const carById = new Map(cars.map((c) => [String(c._id), c]));
   const restByKey = new Map(restDays.map((r) => [dateKeyTashkent(r.date), r]));
 
   const existing = await DailyPlan.find({
@@ -123,14 +138,14 @@ const ensureRange = async ({ driver, fromDate, toDate }) => {
   const ops = [];
   let cursor = fromDate;
   while (cursor.getTime() <= end.getTime()) {
-    const snap = buildSnapshot({ driver, dayDate: cursor, periods, prices, restByKey });
+    const snap = buildSnapshot({ driver, dayDate: cursor, periods, assignments, prices, carById, restByKey });
     const dateKey = dateKeyTashkent(cursor);
     if (snap) {
       const current = existingByKey.get(dateKey);
       if (!current) {
         ops.push({ insertOne: { document: snap } });
       } else if (!frozen.has(String(current._id))) {
-        // Muzlamagan plan: forward-propagatsiya (§11B) — snapshotni yangilab qo'yamiz.
+        // Muzlamagan plan: forward-propagatsiya (§11B) - snapshotni yangilab qo'yamiz.
         ops.push({
           updateOne: { filter: { _id: current._id }, update: { $set: snap } },
         });
@@ -144,7 +159,7 @@ const ensureRange = async ({ driver, fromDate, toDate }) => {
       await DailyPlan.bulkWrite(ops, { ordered: false });
     } catch (e) {
       // Bir vaqtning o'zida yaratishda unique (driver+dateKey) to'qnashuvi bo'lishi
-      // mumkin — bu xavfsiz, e'tiborsiz qoldiramiz. Boshqa xatolar qayta tashlanadi.
+      // mumkin - bu xavfsiz, e'tiborsiz qoldiramiz. Boshqa xatolar qayta tashlanadi.
       const isDup =
         e?.code === 11000 ||
         (Array.isArray(e?.writeErrors) && e.writeErrors.every((w) => w?.code === 11000));
@@ -198,7 +213,7 @@ export const getPlanById = async (id) => {
 // --- Referensial qulf (§5) yordamchilari ---
 // Berilgan filtrga mos kunlik planlarga BOG'LANGAN tranzaksiyalar qamragan sana
 // oralig'i (min..max) yoki null. Ish davri / narx davrini tahrirlash-o'chirish
-// cheklash uchun ishlatiladi (manba — modellar, servis emas; tsikl yo'q).
+// cheklash uchun ishlatiladi (manba - modellar, servis emas; tsikl yo'q).
 const transactedRange = async (planFilter) => {
   const planIds = await DailyPlan.distinct("_id", planFilter);
   if (!planIds.length) return null;
@@ -214,6 +229,14 @@ export const transactedRangeForWorkPeriod = (workPeriodId) =>
 
 export const transactedRangeForCarPrice = (carPriceId) =>
   transactedRange({ carPrice: carPriceId });
+
+// Haydovchining [fromDate, toDate] oralig'idagi tranzaksiyali kunlari sana
+// oralig'i (mashina tayinlash davrini tahrirlash/o'chirishni cheklash uchun).
+export const transactedRangeForDriverInRange = (driverId, fromDate, toDate) =>
+  transactedRange({
+    driver: driverId,
+    date: { $gte: startOfDayTashkent(fromDate), $lte: startOfDayTashkent(toDate) },
+  });
 
 // Agenda job uchun: bitta haydovchining bugungacha planlarini ta'minlash.
 export const ensureUpToToday = async (driverId, fromDate) => {

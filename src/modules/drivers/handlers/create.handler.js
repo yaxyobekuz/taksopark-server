@@ -11,7 +11,7 @@ const normalize = (body) => {
 const create = asyncHandler(async (req, res) => {
   const body = normalize(req.body);
   if (req.file) body.photoUrl = fileToPublicUrl(req.file);
-  const data = await driversService.create(body);
+  const data = await driversService.create(body, req.user);
   res.status(201).json({ success: true, data, message: "Haydovchi qo'shildi" });
 });
 

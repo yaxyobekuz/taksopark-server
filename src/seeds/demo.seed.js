@@ -5,6 +5,7 @@ import Car from "../models/car.model.js";
 import Driver from "../models/driver.model.js";
 import WorkPeriod, { TARIFF } from "../models/workPeriod.model.js";
 import CarPrice from "../models/carPrice.model.js";
+import CarAssignment from "../models/carAssignment.model.js";
 import DailyPlan from "../models/dailyPlan.model.js";
 import Transaction from "../models/transaction.model.js";
 import Fine from "../models/fine.model.js";
@@ -22,6 +23,7 @@ const seed = async () => {
     Driver.deleteMany({}),
     WorkPeriod.deleteMany({}),
     CarPrice.deleteMany({}),
+    CarAssignment.deleteMany({}),
     DailyPlan.deleteMany({}),
     Transaction.deleteMany({}),
     Fine.deleteMany({}),
@@ -95,7 +97,17 @@ const seed = async () => {
   ]);
   logger.info("Ish davrlari yaratildi");
 
-  // Mashina narx davrlari (ochiq) — kunlik planlar shu narxlardan snapshot oladi.
+  // Mashina biriktirish davrlari - kunlik plan mashinani SHU tarixdan oladi (§2).
+  // Har biri ish davrini qamrash uchun eng erta ish sanasidan ochiq biriktiriladi.
+  await CarAssignment.insertMany([
+    { driver: drivers[0]._id, car: cars[0]._id, startDate: daysAgo(10), endDate: null, createdBy: owner._id },
+    { driver: drivers[1]._id, car: cars[1]._id, startDate: daysAgo(3), endDate: null, createdBy: owner._id },
+    { driver: drivers[2]._id, car: cars[2]._id, startDate: daysAgo(40), endDate: null, createdBy: owner._id },
+    { driver: drivers[3]._id, car: cars[3]._id, startDate: daysAgo(30), endDate: null, createdBy: owner._id },
+  ]);
+  logger.info("Mashina biriktirish davrlari yaratildi");
+
+  // Mashina narx davrlari (ochiq) - kunlik planlar shu narxlardan snapshot oladi.
   await CarPrice.insertMany([
     { car: cars[0]._id, dailyRateDeposit: 80000, dailyRateCashback: 100000, monthlyCashback: 500000, startDate: daysAgo(60), endDate: null, createdBy: owner._id },
     { car: cars[1]._id, dailyRateDeposit: 70000, dailyRateCashback: 90000, monthlyCashback: 450000, startDate: daysAgo(60), endDate: null, createdBy: owner._id },
