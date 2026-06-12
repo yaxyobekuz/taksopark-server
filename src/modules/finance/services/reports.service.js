@@ -1,10 +1,14 @@
-import WorkPeriod from "../../../models/workPeriod.model.js";
+import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
 import Transaction, { TX_TYPE } from "../../../models/transaction.model.js";
+import DailyPlan from "../../../models/dailyPlan.model.js";
+import DepositTransaction, { DEPOSIT_TX_TYPE } from "../../../models/depositTransaction.model.js";
+import CashbackTransaction, { CASHBACK_TX_TYPE } from "../../../models/cashbackTransaction.model.js";
+import Fine from "../../../models/fine.model.js";
+import Damage from "../../../models/damage.model.js";
+import Driver from "../../../models/driver.model.js";
 import { startOfDayTashkent, addMonths, addDays, dateKeyTashkent } from "../../../utils/timezone.js";
 import { monthView } from "../../payments/services/dailyPlans.service.js";
-import * as cashbacks from "./cashbacks.service.js";
-import * as deposits from "./deposits.service.js";
-import * as account from "./account.service.js";
+import * as cashbackAccrual from "./cashbackAccrual.service.js";
 import { settleDriver } from "./settlement.service.js";
 
 const monthBounds = (year, month) => {
@@ -13,6 +17,16 @@ const monthBounds = (year, month) => {
   const monthEnd = startOfDayTashkent(addDays(nextMonthStart, -1));
   return { monthStart, monthEnd };
 };
+
+// Yarim-ochiq oraliq [start, nextStart) - oylik aggregate filtrlari uchun (vaqt
+// komponentli createdAt larni ham to'g'ri qamrab oladi).
+const monthRange = (year, month) => {
+  const start = startOfDayTashkent(new Date(Date.UTC(year, month - 1, 1)));
+  const nextStart = startOfDayTashkent(addMonths(start, 1));
+  return { start, nextStart };
+};
+
+const PENALTY_KINDS = ["fine", "damage"];
 
 // O'sha oyda ish davri bor haydovchilar (ortiqcha hisob-kitobning oldini olamiz).
 const driversWithWorkInMonth = async (monthStart, monthEnd) =>
@@ -93,7 +107,7 @@ export const dailyPlansForMonth = async ({ year, month }) => {
 };
 
 // Kunlik to'lov pul oqimi: tanlangan oy, kun bo'yicha kirim (to'lov) va chiqim
-// (tuzatuvchi reversal). Kun bo'yicha — line chart uchun. Plan kuni (`date`) bo'yicha.
+// (tuzatuvchi reversal). Kun bo'yicha - line chart uchun. Plan kuni (`date`) bo'yicha.
 export const dailyPaymentFlow = async ({ year, month }) => {
   const { monthStart, monthEnd } = monthBounds(year, month);
   const grouped = await Transaction.aggregate([
@@ -124,27 +138,188 @@ export const dailyPaymentFlow = async ({ year, month }) => {
   return { series, totals };
 };
 
-// Hisobotlar sahifasi: tanlangan oy bo'yicha umumiy moliyaviy manzara.
+// ─────────────────────────────────────────────────────────────────────────────
+// UCHTA HAMYON modeli (egasi uchun aniq hisobot). Hammasi DERIVED - hech narsa
+// saqlanmaydi, har safar tranzaksiyalardan qayta hisoblanadi (§10 ANTI-QOIDA).
+//
+// 1) ASOSIY (P&L): Tushum (kunlik ijara to'lovlari) − Keshbek chiqim = Sof foyda.
+// 2) DEPOZIT: haydovchining garovi - taksoparkka tegishli emas, foydaga kirmaydi.
+// 3) JARIMA/ZARAR: taksopark qoplaydi → haydovchi qaytaradi; foydaga kirmaydi.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 1-hamyon (P&L). `range` berilsa shu oy, bo'lmasa umumiy (all-time).
+//   Tushum   = Σ Transaction(payment − reversal). Naqd/depozitdan/keshbekdan
+//              qoplangan har qanday ijara shu yerda (settlement `Transaction{source}`
+//              yaratadi). Jarima/zarar qoplashlari `Transaction` yaratmaydi → bu yerda yo'q.
+//   Keshbek  = Σ CashbackTransaction(payout, coverage.kind ∉ {fine,damage}) − reversal.
+//   chiqim     (naqd avans + ijarani qoplagan keshbek; jarima/zararni qoplagan keshbek 3-hamyonda)
+const pnlFigures = async (range) => {
+  const txMatch = range ? { date: { $gte: range.start, $lt: range.nextStart } } : {};
+  const cbPipeline = [{ $addFields: { eff: { $ifNull: ["$coverage.date", "$createdAt"] } } }];
+  if (range) cbPipeline.push({ $match: { eff: { $gte: range.start, $lt: range.nextStart } } });
+  cbPipeline.push({
+    $group: {
+      _id: null,
+      payout: {
+        $sum: {
+          $cond: [
+            {
+              $and: [
+                { $eq: ["$type", CASHBACK_TX_TYPE.PAYOUT] },
+                { $not: [{ $in: [{ $ifNull: ["$coverage.kind", null] }, PENALTY_KINDS] }] },
+              ],
+            },
+            "$amount",
+            0,
+          ],
+        },
+      },
+      reversal: { $sum: { $cond: [{ $eq: ["$type", CASHBACK_TX_TYPE.REVERSAL] }, "$amount", 0] } },
+    },
+  });
+
+  const [txAgg, cbAgg] = await Promise.all([
+    Transaction.aggregate([
+      { $match: txMatch },
+      {
+        $group: {
+          _id: null,
+          payment: { $sum: { $cond: [{ $eq: ["$type", TX_TYPE.PAYMENT] }, "$amount", 0] } },
+          reversal: { $sum: { $cond: [{ $eq: ["$type", TX_TYPE.REVERSAL] }, "$amount", 0] } },
+        },
+      },
+    ]),
+    CashbackTransaction.aggregate(cbPipeline),
+  ]);
+
+  const revenue = (txAgg[0]?.payment || 0) - (txAgg[0]?.reversal || 0);
+  const cashbackExpense = (cbAgg[0]?.payout || 0) - (cbAgg[0]?.reversal || 0);
+  return { revenue, cashbackExpense, net: revenue - cashbackExpense };
+};
+
+// Q3: ijara qarzi bor haydovchilar (jarima/zarar bu yerga KIRMAYDI). Har haydovchi
+// uchun qarz = Σ planAmount − (Σ payment − Σ reversal). Depozit/keshbek bilan
+// qoplangani allaqachon `payment` bo'lib ketgani uchun bu "haqiqatan to'lanmagan ijara".
+const debtors = async () => {
+  const [planAgg, payAgg] = await Promise.all([
+    DailyPlan.aggregate([{ $group: { _id: "$driver", plan: { $sum: "$planAmount" } } }]),
+    Transaction.aggregate([
+      {
+        $group: {
+          _id: "$driver",
+          payment: { $sum: { $cond: [{ $eq: ["$type", TX_TYPE.PAYMENT] }, "$amount", 0] } },
+          reversal: { $sum: { $cond: [{ $eq: ["$type", TX_TYPE.REVERSAL] }, "$amount", 0] } },
+        },
+      },
+    ]),
+  ]);
+
+  const paidMap = new Map(payAgg.map((r) => [String(r._id), r.payment - r.reversal]));
+  const debts = [];
+  for (const p of planAgg) {
+    const debt = p.plan - (paidMap.get(String(p._id)) || 0);
+    if (debt > 0) debts.push({ driverId: p._id, debt });
+  }
+  debts.sort((a, b) => b.debt - a.debt);
+
+  const drivers = await Driver.find({ _id: { $in: debts.map((d) => d.driverId) } }).select(
+    "firstName lastName phone",
+  );
+  const dmap = new Map(drivers.map((d) => [String(d._id), d]));
+  const rows = debts.map((d) => {
+    const dr = dmap.get(String(d.driverId));
+    return {
+      driver: dr
+        ? { _id: dr._id, firstName: dr.firstName, lastName: dr.lastName, phone: dr.phone }
+        : { _id: d.driverId },
+      debt: d.debt,
+    };
+  });
+  const total = rows.reduce((s, r) => s + r.debt, 0);
+  return { total, rows };
+};
+
+// 2-hamyon: barcha haydovchilar bo'yicha hozir ushlab turilgan garov = Σ(in − out).
+const depositTotal = async () => {
+  const [agg] = await DepositTransaction.aggregate([
+    {
+      $group: {
+        _id: null,
+        in: { $sum: { $cond: [{ $eq: ["$type", DEPOSIT_TX_TYPE.IN] }, "$amount", 0] } },
+        out: { $sum: { $cond: [{ $eq: ["$type", DEPOSIT_TX_TYPE.OUT] }, "$amount", 0] } },
+      },
+    },
+  ]);
+  return (agg?.in || 0) - (agg?.out || 0);
+};
+
+// Keshbek hamyoni: hisoblangan / berilgan / qoldiq (= hozir qancha keshbek bor /
+// berishim kerak). `paidOut` BARCHA payout (jarima/zararni qoplagani ham) - bu
+// keshbek qoldig'ining haqiqiy kamayishi.
+const cashbackWallet = async () => {
+  const driverIds = await WorkPeriod.distinct("driver", { tariff: TARIFF.CASHBACK });
+  let accrued = 0;
+  for (const id of driverIds) accrued += await cashbackAccrual.accruedTotal(id);
+
+  const [agg] = await CashbackTransaction.aggregate([
+    {
+      $group: {
+        _id: null,
+        payout: { $sum: { $cond: [{ $eq: ["$type", CASHBACK_TX_TYPE.PAYOUT] }, "$amount", 0] } },
+        reversal: { $sum: { $cond: [{ $eq: ["$type", CASHBACK_TX_TYPE.REVERSAL] }, "$amount", 0] } },
+      },
+    },
+  ]);
+  const paidOut = (agg?.payout || 0) - (agg?.reversal || 0);
+  return { accrued, paidOut, outstanding: accrued - paidOut };
+};
+
+// 3-hamyon: jarima/zarar. fronted = taksopark qoplagan jami; repaid = haydovchidan
+// (depozit/keshbek coverage orqali) qaytarilgani; outstanding = qoldiq.
+const penaltyWallet = async () => {
+  const [fineAgg, damageAgg, depRep, cbRep] = await Promise.all([
+    Fine.aggregate([{ $group: { _id: null, s: { $sum: "$amount" } } }]),
+    Damage.aggregate([{ $group: { _id: null, s: { $sum: "$amount" } } }]),
+    DepositTransaction.aggregate([
+      { $match: { type: DEPOSIT_TX_TYPE.OUT, "coverage.kind": { $in: PENALTY_KINDS } } },
+      { $group: { _id: null, s: { $sum: "$amount" } } },
+    ]),
+    CashbackTransaction.aggregate([
+      { $match: { type: CASHBACK_TX_TYPE.PAYOUT, "coverage.kind": { $in: PENALTY_KINDS } } },
+      { $group: { _id: null, s: { $sum: "$amount" } } },
+    ]),
+  ]);
+  const fronted = (fineAgg[0]?.s || 0) + (damageAgg[0]?.s || 0);
+  const repaid = (depRep[0]?.s || 0) + (cbRep[0]?.s || 0);
+  return { fronted, repaid, outstanding: fronted - repaid };
+};
+
+// Hisobotlar sahifasi: uchta hamyon + 6 ta savolga javob (oy + umumiy).
 export const overview = async ({ year, month }) => {
-  const allDriverIds = await WorkPeriod.distinct("driver", {});
-  const [payments, cashbackSummary, depositSummary, accTotals, flow] = await Promise.all([
-    dailyPaymentsSummary({ year, month }),
-    cashbacks.summaryAll(),
-    deposits.summaryAll(),
-    account.totalsForDrivers(allDriverIds),
+  const range = monthRange(year, month);
+  const [monthPnl, totalPnl, debtorsData, depTotal, cbWallet, penalties, flow] = await Promise.all([
+    pnlFigures(range),
+    pnlFigures(),
+    debtors(),
+    depositTotal(),
+    cashbackWallet(),
+    penaltyWallet(),
     dailyPaymentFlow({ year, month }),
   ]);
 
   return {
-    // Oylik (gross) — tanlangan oy uchun reja/to'langan.
-    payments: payments.totals,
-    // Kunlik to'lov kirim/chiqim — oylik jami + kun bo'yicha seriya (chart).
+    period: { year, month },
+    // 1-hamyon (P&L): tushum − keshbek chiqim = sof foyda.
+    profit: { month: monthPnl, total: totalPnl },
+    // Q3: ijara qarzi + qarzdorlar ro'yxati.
+    debtors: debtorsData,
+    // 2-hamyon: ushlab turilgan garov (foydaga kirmaydi).
+    deposit: { total: depTotal },
+    // Keshbek hamyoni: hisoblangan/berilgan/qoldiq.
+    cashback: cbWallet,
+    // 3-hamyon: jarima/zarar (foydaga kirmaydi).
+    penalties,
+    // Oylik kunlik to'lov oqimi (chart).
     flow,
-    // NET qarz — depozit/keshbek bilan qoplangandan keyingi haqiqiy qarz (§10).
-    netDebt: accTotals.debt,
-    available: accTotals.available,
-    cashback: cashbackSummary.totals,
-    deposit: { total: depositSummary.total },
-    driverCount: payments.rows.length,
   };
 };
