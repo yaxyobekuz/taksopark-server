@@ -7,6 +7,7 @@ import Damage from "../../../models/damage.model.js";
 import { ensureUpToToday, paidByPlan } from "../../payments/services/dailyPlans.service.js";
 import * as workPeriods from "../../workPeriods/services/workPeriods.service.js";
 import * as cashbackAccrual from "./cashbackAccrual.service.js";
+import { toObjectId } from "../../../utils/objectId.js";
 
 // §10 QOPLASH (settlement): haydovchining qoplanmagan majburiyatlarini (eng eskidan)
 // mavjud DEPOZIT, so'ng KESHBEK bilan avtomatik yopadi. Har qoplash AYNIQ yoziladi:
@@ -21,26 +22,28 @@ const sumOut = async (Model, match) => {
 };
 
 const depositBalance = async (driverId) => {
-  const inSum = await sumOut(DepositTransaction, { driver: driverId, type: DEPOSIT_TX_TYPE.IN });
-  const outSum = await sumOut(DepositTransaction, { driver: driverId, type: DEPOSIT_TX_TYPE.OUT });
+  const did = toObjectId(driverId);
+  const inSum = await sumOut(DepositTransaction, { driver: did, type: DEPOSIT_TX_TYPE.IN });
+  const outSum = await sumOut(DepositTransaction, { driver: did, type: DEPOSIT_TX_TYPE.OUT });
   return inSum - outSum;
 };
 
 // Jarima/zarar uchun qoplangan summa (depozit + keshbek coverage refi bo'yicha).
 export const coverageByRef = async (driverId, kind) => {
+  const did = toObjectId(driverId);
   const map = new Map();
   const add = (rows) => {
     for (const r of rows) map.set(String(r._id), (map.get(String(r._id)) || 0) + r.s);
   };
   add(
     await DepositTransaction.aggregate([
-      { $match: { driver: driverId, type: DEPOSIT_TX_TYPE.OUT, "coverage.kind": kind } },
+      { $match: { driver: did, type: DEPOSIT_TX_TYPE.OUT, "coverage.kind": kind } },
       { $group: { _id: "$coverage.ref", s: { $sum: "$amount" } } },
     ]),
   );
   add(
     await CashbackTransaction.aggregate([
-      { $match: { driver: driverId, type: CASHBACK_TX_TYPE.PAYOUT, "coverage.kind": kind } },
+      { $match: { driver: did, type: CASHBACK_TX_TYPE.PAYOUT, "coverage.kind": kind } },
       { $group: { _id: "$coverage.ref", s: { $sum: "$amount" } } },
     ]),
   );
@@ -75,7 +78,7 @@ const buildObligations = async (driverId) => {
 
 const LABEL = { daily: "Kunlik ijara qoplandi", fine: "Jarima qoplandi", damage: "Zarar qoplandi" };
 
-export const settleDriver = async (driverId, userId = null) => {
+const settleDriverImpl = async (driverId, userId = null) => {
   const firstWork = await workPeriods.firstStartDate(driverId);
   if (!firstWork) return;
   await ensureUpToToday(driverId, firstWork);
@@ -149,4 +152,29 @@ export const settleDriver = async (driverId, userId = null) => {
 
     if (depositBal <= 0 && cbTotal <= 0) break;
   }
+};
+
+// Concurrency himoyasi: settleDriver ko'p joydan (depozit kirim, sahifa o'qish,
+// kunlik job) bir vaqtda chaqiriladi. Himoyasiz bo'lsa parallel ishlashlar bir xil
+// qarzni qayta qoplab DUBLIKAT (yoki yarim) qoplash yaratadi — depozit ledger buziladi.
+// Shu sababli HAR HAYDOVCHI uchun ketma-ket (per-driver mutex) ishlatamiz: parallel
+// chaqiruvlar navbatga turadi, birinchisi hammasini qoplaydi, qolganlari idempotent
+// no-op bo'ladi. (Bitta Node jarayoni — Agenda ham shu jarayonda, demak in-process
+// lock yetarli; bir necha jarayonga o'tilsa, DB-asosli lock kerak bo'ladi.)
+const settleLocks = new Map();
+
+export const settleDriver = (driverId, userId = null) => {
+  const key = String(driverId);
+  const prev = settleLocks.get(key) || Promise.resolve();
+  // Oldingisi xato bilan tugasa ham navbat to'xtamaydi.
+  const next = prev.then(
+    () => settleDriverImpl(driverId, userId),
+    () => settleDriverImpl(driverId, userId),
+  );
+  const tail = next.catch(() => {}); // navbat quyrug'i hech qachon reject bo'lmaydi
+  settleLocks.set(key, tail);
+  tail.then(() => {
+    if (settleLocks.get(key) === tail) settleLocks.delete(key);
+  });
+  return next; // chaqiruvchi haqiqiy natija/xatoni oladi
 };
