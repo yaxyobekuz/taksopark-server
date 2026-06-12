@@ -3,14 +3,27 @@ import CarDocumentType from "../../../models/carDocumentType.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { removeFileByUrl, fileToPublicUrl } from "../../../utils/fileStorage.js";
+import * as workPeriodsService from "../../workPeriods/services/workPeriods.service.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const populateDocs = (q) =>
   q.populate("documents.documentType", "name").populate(
     "currentDriver",
-    "firstName lastName phone status photoUrl startDate",
+    "firstName lastName phone photoUrl",
   );
+
+// currentDriver'ga joriy ish davrini (DERIVED holat uchun) biriktiradi.
+const decorateCarDriver = async (car) => {
+  if (!car?.currentDriver) return car;
+  const obj = car.toJSON();
+  const activeMap = await workPeriodsService.activePeriodsByDriver([obj.currentDriver._id]);
+  const active = activeMap.get(String(obj.currentDriver._id));
+  obj.currentDriver.currentPeriod = active
+    ? { _id: active._id, tariff: active.tariff, startDate: active.startDate, endDate: active.endDate }
+    : null;
+  return obj;
+};
 
 export const list = async ({ search, isActive, page = 1, limit = 20 }) => {
   const filter = {};
@@ -23,7 +36,7 @@ export const list = async ({ search, isActive, page = 1, limit = 20 }) => {
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
     Car.find(filter)
-      .populate("currentDriver", "firstName lastName phone status")
+      .populate("currentDriver", "firstName lastName phone")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -35,7 +48,7 @@ export const list = async ({ search, isActive, page = 1, limit = 20 }) => {
 export const getById = async (id) => {
   const car = await populateDocs(Car.findById(id));
   if (!car) throw new ApiError(404, "Mashina topilmadi");
-  return car;
+  return decorateCarDriver(car);
 };
 
 export const create = async (body) => {
@@ -116,8 +129,8 @@ export const softRemove = async (id) => {
   if (!car) throw new ApiError(404, "Mashina topilmadi");
   if (car.currentDriver) {
     const driver = await Driver.findById(car.currentDriver);
-    if (driver && driver.status === "active") {
-      throw new ApiError(409, "Mashinaga faol haydovchi biriktirilgan. Avval haydovchini ajrating");
+    if (driver) {
+      throw new ApiError(409, "Mashinaga haydovchi biriktirilgan. Avval haydovchini ajrating");
     }
   }
   car.isActive = false;

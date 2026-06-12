@@ -1,5 +1,5 @@
 import RestDay from "../../../models/restDay.model.js";
-import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
+import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent, addDays, addMonths, endOfDayTashkent, dateKeyTashkent } from "../../../utils/timezone.js";
 
@@ -33,9 +33,6 @@ export const list = async ({ driverId, fromDate, toDate, page = 1, limit = 20 })
 export const create = async (body, currentUser) => {
   const driver = await Driver.findById(body.driverId);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  if (driver.status !== DRIVER_STATUS.ACTIVE) {
-    throw new ApiError(409, "Haydovchi faol emas");
-  }
   if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
 
   const date = startOfDayTashkent(body.date);

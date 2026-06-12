@@ -1,5 +1,5 @@
 import Damage from "../../../models/damage.model.js";
-import Driver, { DRIVER_STATUS } from "../../../models/driver.model.js";
+import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 
@@ -39,9 +39,6 @@ export const create = async (body, attachments, currentUser) => {
   }
   const driver = await Driver.findById(body.driverId);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  if (driver.status === DRIVER_STATUS.ARCHIVED) {
-    throw new ApiError(409, "Haydovchi arxivlangan");
-  }
   if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
 
   const incidentDate = startOfDayTashkent(body.incidentDate);
