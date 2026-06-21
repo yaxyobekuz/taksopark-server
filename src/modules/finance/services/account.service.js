@@ -96,6 +96,16 @@ export const computeForDriver = async (driverId) => {
 export const availableForDriver = async (driverId) =>
   (await computeForDriver(driverId)).available;
 
+// Depozit MANBA qoldig'i = Σ(in) − Σ(out). Bu haydovchining DEPOZIT hisobida
+// haqiqatan yotgan pul (jami account.available'dan FARQLI - unga keshbek/balans
+// ham kiradi). Depozitdan naqd YECHISH faqat shu qoldiq bilan cheklanadi: aks holda
+// keshbekdan hisoblangan pulni "depozit chiqimi" deb yozib, depozit ledgerini
+// manfiyga tushirib bo'lardi.
+export const depositBalanceForDriver = async (driverId) => {
+  const dep = await signedSum(DepositTransaction, driverId, DEPOSIT_TX_TYPE.IN, DEPOSIT_TX_TYPE.OUT);
+  return dep.plus - dep.minus;
+};
+
 // Bir nechta haydovchi uchun jami ko'rsatkichlar (Hisobotlar/overview uchun).
 export const totalsForDrivers = async (driverIds) => {
   const totals = { debt: 0, available: 0, cashbackAccrued: 0, cashbackPayout: 0, fines: 0, damages: 0 };
@@ -172,7 +182,7 @@ export const ledgerForDriver = async (driverId) => {
   for (const m of cbData.months)
     if (m.accrued > 0)
       entries.push({
-        date: m.isComplete ? m.monthEnd : new Date(),
+        date: m.accrualDate,
         kind: "cashback_accrued",
         label: "Keshbek (hisoblangan)",
         note: "",

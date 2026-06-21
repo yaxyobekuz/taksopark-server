@@ -89,9 +89,16 @@ export const createMovement = async (driverId, { type, amount, note }, currentUs
   }
 
   if (type === DEPOSIT_TX_TYPE.OUT) {
-    const available = await account.availableForDriver(driverId);
-    if (value > available) {
-      throw new ApiError(409, `Chiqim mavjud balansdan (${available}) oshmasligi kerak`);
+    // Naqd yechish IKKI cheklov bilan: (1) DEPOZIT manbasida shuncha pul bo'lsin
+    // (keshbek/balansdan "depozit chiqimi" yozib bo'lmaydi), (2) yechgach umumiy
+    // hisob qarzga tushmasin. Bog'lovchi chegara = min(depozit qoldig'i, available).
+    const [depositBal, available] = await Promise.all([
+      account.depositBalanceForDriver(driverId),
+      account.availableForDriver(driverId),
+    ]);
+    const cap = Math.min(depositBal, available);
+    if (value > cap) {
+      throw new ApiError(409, `Chiqim mavjud depozit qoldig'idan (${cap}) oshmasligi kerak`);
     }
   }
 
@@ -103,11 +110,14 @@ export const createMovement = async (driverId, { type, amount, note }, currentUs
     createdBy: currentUser._id,
   });
 
-  // Konkurensiya himoyasi (§8 audit): chiqimdan keyin qoldiq manfiyga tushsa
-  // (bir vaqtda ikki chiqim), yangi yozuvni qaytarib olamiz.
+  // Konkurensiya himoyasi (§8 audit): bir vaqtda ikki chiqim (yoki settlement) bilan
+  // depozit manbasi YOKI umumiy hisob manfiyga tushsa - yangi yozuvni qaytarib olamiz.
   if (type === DEPOSIT_TX_TYPE.OUT) {
-    const acc = await account.computeForDriver(driverId);
-    if (acc.net < 0) {
+    const [depositBal, acc] = await Promise.all([
+      account.depositBalanceForDriver(driverId),
+      account.computeForDriver(driverId),
+    ]);
+    if (depositBal < 0 || acc.net < 0) {
       await created.deleteOne();
       throw new ApiError(409, "Chiqim mavjud balansdan oshib ketdi, qayta urinib ko'ring");
     }
