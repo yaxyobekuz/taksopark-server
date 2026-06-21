@@ -2,7 +2,7 @@ import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
-import { transactedRangeForWorkPeriod } from "../../payments/services/dailyPlans.service.js";
+import { transactedRangeForWorkPeriod, ensureUpToToday } from "../../payments/services/dailyPlans.service.js";
 
 const POSITIVE_INFINITY = Number.POSITIVE_INFINITY;
 
@@ -57,7 +57,7 @@ export const create = async (driverId, body, currentUser) => {
   const existing = await WorkPeriod.find({ driver: driverId });
   assertNoConflict({ startDate, endDate }, existing);
 
-  return WorkPeriod.create({
+  const created = await WorkPeriod.create({
     driver: driverId,
     tariff: body.tariff,
     startDate,
@@ -65,11 +65,18 @@ export const create = async (driverId, body, currentUser) => {
     note: body.note || "",
     createdBy: currentUser._id,
   });
+  // §11B forward-propagatsiya: yangi davr muzlamagan kunlik planlarga darhol
+  // tarqalsin (tarif/sana snapshoti yangilanadi). Muzlagan kunlar tegilmaydi.
+  await ensureUpToToday(driverId, startDate);
+  return created;
 };
 
 export const update = async (id, body) => {
   const period = await WorkPeriod.findById(id);
   if (!period) throw new ApiError(404, "Ish davri topilmadi");
+
+  // Resync chegarasi uchun eski startDate'ni save'dan OLDIN saqlaymiz.
+  const oldStart = startOfDayTashkent(period.startDate);
 
   // §5: tarifni o'zgartirish faqat bog'langan tranzaksiya bo'lmasa.
   if (body.tariff !== undefined && body.tariff !== period.tariff) {
@@ -92,8 +99,7 @@ export const update = async (id, body) => {
 
   // Sana o'zgarsa, boshqa davrlar bilan to'qnashuvni qayta tekshiramiz (§4).
   const datesChanged =
-    nextStart.getTime() !== startOfDayTashkent(period.startDate).getTime() ||
-    endMs({ endDate: nextEnd }) !== endMs(period);
+    nextStart.getTime() !== oldStart.getTime() || endMs({ endDate: nextEnd }) !== endMs(period);
   if (datesChanged) {
     const others = await WorkPeriod.find({ driver: period.driver, _id: { $ne: period._id } });
     assertNoConflict({ startDate: nextStart, endDate: nextEnd }, others);
@@ -118,6 +124,12 @@ export const update = async (id, body) => {
   if (body.note !== undefined) period.note = body.note;
 
   await period.save();
+
+  // §11B: muzlamagan kunlik planlarni qayta snapshot qilamiz (tarif/sana o'zgarishi
+  // tarqalsin). Eng erta sanadan (eski yoki yangi start) boshlaymiz - qisqartirilgan
+  // davrning ortda qolgan muzlamagan planlari ham o'chirilsin (ensureRange ichida).
+  const resyncFrom = nextStart.getTime() < oldStart.getTime() ? nextStart : oldStart;
+  await ensureUpToToday(period.driver, resyncFrom);
   return period;
 };
 
@@ -125,7 +137,10 @@ export const remove = async (id) => {
   const period = await WorkPeriod.findById(id);
   if (!period) throw new ApiError(404, "Ish davri topilmadi");
   await assertNoLinkedTransactions(period);
+  const { driver, startDate } = period;
   await period.deleteOne();
+  // §11B: davr o'chgach, undan kelib chiqqan muzlamagan planlar ham o'chsin/tiklansin.
+  await ensureUpToToday(driver, startDate);
 };
 
 // --- Derived holat (haydovchilarni bezash uchun) ---
