@@ -84,6 +84,10 @@ export const monthsForDriver = async (driverId) => {
     return {
       monthStart: m.mStart,
       monthEnd: m.mEnd,
+      // Hisoblangan keshbek qaysi sanada "kuchga kiradi": oy tugagan bo'lsa oy oxiri,
+      // hali davom etayotgan bo'lsa - oxirgi hisoblangan kun (rangeEnd). Bu DETERMINISTIK:
+      // ledger tartibi har o'qishda o'zgarmaydi (avval `new Date()` ishlatilardi).
+      accrualDate: m.rangeEnd,
       daysInMonth: m.daysInMonth,
       accrued,
       paidOut,

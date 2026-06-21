@@ -85,7 +85,7 @@ export const cashbackLedger = async (driverId) => {
   const entries = [];
   for (const m of cb.months) {
     if (m.accrued > 0)
-      entries.push({ date: m.isComplete ? m.monthEnd : new Date(), label: "Keshbek hisoblandi", note: "", amount: m.accrued });
+      entries.push({ date: m.accrualDate, label: "Keshbek hisoblandi", note: "", amount: m.accrued });
   }
   for (const t of txs) {
     const isReversal = t.type === CASHBACK_TX_TYPE.REVERSAL;
