@@ -8,6 +8,7 @@ import { ensureUpToToday, paidByPlan } from "../../payments/services/dailyPlans.
 import * as workPeriods from "../../workPeriods/services/workPeriods.service.js";
 import * as cashbackAccrual from "./cashbackAccrual.service.js";
 import { toObjectId } from "../../../utils/objectId.js";
+import { withTransaction } from "../../../utils/withTransaction.js";
 
 // §10 QOPLASH (settlement): haydovchining qoplanmagan majburiyatlarini (eng eskidan)
 // mavjud DEPOZIT, so'ng KESHBEK bilan avtomatik yopadi. Har qoplash AYNIQ yoziladi:
@@ -96,18 +97,78 @@ const settleDriverImpl = async (driverId, userId = null) => {
 
   const obligations = await buildObligations(driverId);
 
-  const coverDaily = async (ref, date, amount, source) => {
-    await Transaction.create({
-      dailyPlan: ref,
-      driver: driverId,
-      date,
-      type: TX_TYPE.PAYMENT,
-      source,
-      amount,
-      note: source === TX_SOURCE.DEPOSIT ? "Depozitdan qoplandi" : "Keshbekdan qoplandi",
-      createdBy: userId,
+  // Manbadan chiqim + (kunlik bo'lsa) plan to'lovi ATOMAR yoziladi (§6): ikkalasi
+  // birga yoki hech biri - pul yarim yo'lda qolmaydi.
+  const coverFromDeposit = async (ob, c) =>
+    withTransaction(async (session) => {
+      await DepositTransaction.create(
+        [
+          {
+            driver: driverId,
+            type: DEPOSIT_TX_TYPE.OUT,
+            amount: c,
+            coverage: { kind: ob.kind, ref: ob.ref, date: ob.date },
+            auto: true,
+            note: LABEL[ob.kind],
+            createdBy: userId,
+          },
+        ],
+        { session },
+      );
+      if (ob.kind === "daily") {
+        await Transaction.create(
+          [
+            {
+              dailyPlan: ob.ref,
+              driver: driverId,
+              date: ob.date,
+              type: TX_TYPE.PAYMENT,
+              source: TX_SOURCE.DEPOSIT,
+              amount: c,
+              note: "Depozitdan qoplandi",
+              createdBy: userId,
+            },
+          ],
+          { session },
+        );
+      }
     });
-  };
+
+  const coverFromCashback = async (ob, m, c) =>
+    withTransaction(async (session) => {
+      await CashbackTransaction.create(
+        [
+          {
+            driver: driverId,
+            monthStart: m.monthStart,
+            type: CASHBACK_TX_TYPE.PAYOUT,
+            amount: c,
+            coverage: { kind: ob.kind, ref: ob.ref, date: ob.date },
+            auto: true,
+            note: LABEL[ob.kind],
+            createdBy: userId,
+          },
+        ],
+        { session },
+      );
+      if (ob.kind === "daily") {
+        await Transaction.create(
+          [
+            {
+              dailyPlan: ob.ref,
+              driver: driverId,
+              date: ob.date,
+              type: TX_TYPE.PAYMENT,
+              source: TX_SOURCE.CASHBACK,
+              amount: c,
+              note: "Keshbekdan qoplandi",
+              createdBy: userId,
+            },
+          ],
+          { session },
+        );
+      }
+    });
 
   for (const ob of obligations) {
     let need = ob.outstanding;
@@ -115,16 +176,7 @@ const settleDriverImpl = async (driverId, userId = null) => {
     // 1) Depozit / balans
     if (need > 0 && depositBal > 0) {
       const c = Math.min(need, depositBal);
-      await DepositTransaction.create({
-        driver: driverId,
-        type: DEPOSIT_TX_TYPE.OUT,
-        amount: c,
-        coverage: { kind: ob.kind, ref: ob.ref, date: ob.date },
-        auto: true,
-        note: LABEL[ob.kind],
-        createdBy: userId,
-      });
-      if (ob.kind === "daily") await coverDaily(ob.ref, ob.date, c, TX_SOURCE.DEPOSIT);
+      await coverFromDeposit(ob, c);
       depositBal -= c;
       need -= c;
     }
@@ -134,17 +186,7 @@ const settleDriverImpl = async (driverId, userId = null) => {
       const m = wallet.find((x) => x.available > 0);
       if (!m) break;
       const c = Math.min(need, m.available);
-      await CashbackTransaction.create({
-        driver: driverId,
-        monthStart: m.monthStart,
-        type: CASHBACK_TX_TYPE.PAYOUT,
-        amount: c,
-        coverage: { kind: ob.kind, ref: ob.ref, date: ob.date },
-        auto: true,
-        note: LABEL[ob.kind],
-        createdBy: userId,
-      });
-      if (ob.kind === "daily") await coverDaily(ob.ref, ob.date, c, TX_SOURCE.CASHBACK);
+      await coverFromCashback(ob, m, c);
       m.available -= c;
       cbTotal -= c;
       need -= c;
