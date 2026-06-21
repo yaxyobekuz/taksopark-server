@@ -2,9 +2,16 @@ import CarPrice from "../../../models/carPrice.model.js";
 import Car from "../../../models/car.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
-import { transactedRangeForCarPrice } from "../../payments/services/dailyPlans.service.js";
+import { transactedRangeForCarPrice, resyncCarRange } from "../../payments/services/dailyPlans.service.js";
 
 const POSITIVE_INFINITY = Number.POSITIVE_INFINITY;
+
+// Narx davri o'zgargach, shu mashinaning [start, end||bugun] oralig'idagi MUZLAMAGAN
+// kunlik planlarini yangi narx bilan qayta snapshot qilamiz (§11B). end=null => bugun.
+const resyncForPeriod = async (carId, startDate, endDate) => {
+  const to = endDate ? startOfDayTashkent(endDate) : startOfDayTashkent(new Date());
+  await resyncCarRange(carId, startOfDayTashkent(startDate), to);
+};
 
 // endDate = null bo'lsa davr ochiq => +cheksiz.
 const endMs = (period) =>
@@ -58,7 +65,7 @@ export const create = async (carId, body, currentUser) => {
   const existing = await CarPrice.find({ car: carId });
   assertNoConflict({ startDate, endDate }, existing);
 
-  return CarPrice.create({
+  const created = await CarPrice.create({
     car: carId,
     dailyRateDeposit: Number(body.dailyRateDeposit) || 0,
     dailyRateCashback: Number(body.dailyRateCashback) || 0,
@@ -68,6 +75,10 @@ export const create = async (carId, body, currentUser) => {
     note: body.note || "",
     createdBy: currentUser._id,
   });
+
+  // Yangi narx muzlamagan kunlik planlarga darhol qo'llanadi (§11B).
+  await resyncForPeriod(carId, startDate, endDate);
+  return created;
 };
 
 export const update = async (id, body) => {
@@ -109,7 +120,16 @@ export const update = async (id, body) => {
   if (body.monthlyCashback !== undefined) period.monthlyCashback = Number(body.monthlyCashback) || 0;
   if (body.note !== undefined) period.note = body.note;
 
+  // Eski oraliqni save'dan OLDIN olamiz (sana qisqarsa, ochiqda qolgan kunlarni ham
+  // qayta hisoblash uchun ikkala oraliqni qamraymiz).
+  const oldStart = startOfDayTashkent(period.startDate);
+  const oldEnd = period.endDate ? startOfDayTashkent(period.endDate) : null;
+
   await period.save();
+
+  // §11B: ham eski, ham yangi oraliqdagi muzlamagan planlarni qayta snapshot qilamiz.
+  await resyncForPeriod(period.car, oldStart, oldEnd);
+  await resyncForPeriod(period.car, nextStart, nextEnd);
   return period;
 };
 
@@ -117,7 +137,11 @@ export const remove = async (id) => {
   const period = await CarPrice.findById(id);
   if (!period) throw new ApiError(404, "Narx davri topilmadi");
   await assertNoLinkedTransactions(period);
+  const { car, startDate, endDate } = period;
   await period.deleteOne();
+  // Narx olib tashlangach, o'sha oraliqdagi planlar yangi holatga (narx yo'q yoki
+  // boshqa davr) qayta hisoblanadi (§11B).
+  await resyncForPeriod(car, startDate, endDate);
 };
 
 // --- Derived holat (mashinalarni bezash uchun) ---

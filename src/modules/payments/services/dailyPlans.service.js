@@ -257,6 +257,27 @@ export const ensureUpToToday = async (driverId, fromDate) => {
   await ensureRange({ driver, fromDate: startOfDayTashkent(fromDate), toDate: today });
 };
 
+// Narx davri yaratilgach/tahrirlangach (§11B forward-propagatsiya): o'sha mashinaga
+// [fromDate, toDate] oralig'ida tayinlangan HAR BIR haydovchining MUZLAMAGAN kunlik
+// planlarini yangi narx bilan qayta snapshot qiladi. Muzlagan (tranzaksiyali) kunlar
+// tegilmaydi (ensureRange ichida himoyalangan). Aks holda eski ochiq planlar kimdir
+// o'sha oyni ochmaguncha eski narxda qotib qolardi.
+export const resyncCarRange = async (carId, fromDate, toDate) => {
+  const from = startOfDayTashkent(fromDate);
+  const to = startOfDayTashkent(toDate);
+  // Shu oraliqda bu mashinaga tayinlangan barcha haydovchilar.
+  const assignments = await CarAssignment.find({
+    car: carId,
+    startDate: { $lte: to },
+    $or: [{ endDate: null }, { endDate: { $gte: from } }],
+  }).select("driver");
+  const driverIds = [...new Set(assignments.map((a) => String(a.driver)))];
+  for (const driverId of driverIds) {
+    const driver = await Driver.findById(driverId).populate("car", "plateNumber model");
+    if (driver) await ensureRange({ driver, fromDate: from, toDate: to });
+  }
+};
+
 // Bir kun uchun tranzaksiya bormi (dam olish belgilashni cheklash uchun).
 export const hasTransactionsOnDate = async (driverId, date) => {
   const day = startOfDayTashkent(date);
