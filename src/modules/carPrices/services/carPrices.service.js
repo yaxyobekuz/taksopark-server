@@ -85,32 +85,52 @@ export const update = async (id, body) => {
   const period = await CarPrice.findById(id);
   if (!period) throw new ApiError(404, "Narx davri topilmadi");
 
-  // §3/§5: tranzaksiyali (muzlagan) kunlarga ega narx davri tahrirlanmaydi -
-  // o'zgarish o'tmishdagi hisobotni jimgina qayta yozmasligi kerak.
-  await assertNoLinkedTransactions(period);
+  // Eski oraliqni save'dan OLDIN olamiz (sana qisqarsa, ochiqda qolgan kunlarni ham
+  // qayta hisoblash uchun ikkala oraliqni qamraymiz).
+  const oldStart = startOfDayTashkent(period.startDate);
+  const oldEnd = period.endDate ? startOfDayTashkent(period.endDate) : null;
 
-  const nextStart =
-    body.startDate !== undefined
-      ? startOfDayTashkent(body.startDate)
-      : startOfDayTashkent(period.startDate);
+  const nextStart = body.startDate !== undefined ? startOfDayTashkent(body.startDate) : oldStart;
   const nextEnd =
-    body.endDate !== undefined
-      ? body.endDate
-        ? startOfDayTashkent(body.endDate)
-        : null
-      : period.endDate;
+    body.endDate !== undefined ? (body.endDate ? startOfDayTashkent(body.endDate) : null) : period.endDate;
 
   if (nextEnd && nextEnd < nextStart) {
     throw new ApiError(409, "Tugash sanasi boshlanish sanasidan oldin bo'lishi mumkin emas");
   }
 
-  // Sana o'zgarsa, boshqa davrlar bilan to'qnashuvni qayta tekshiramiz (§4).
+  // Narx maydonlari haqiqatan o'zgaryaptimi?
+  const priceChanged =
+    (body.dailyRateDeposit !== undefined && Number(body.dailyRateDeposit) !== period.dailyRateDeposit) ||
+    (body.dailyRateCashback !== undefined && Number(body.dailyRateCashback) !== period.dailyRateCashback) ||
+    (body.monthlyCashback !== undefined && Number(body.monthlyCashback) !== period.monthlyCashback);
+
   const datesChanged =
-    nextStart.getTime() !== startOfDayTashkent(period.startDate).getTime() ||
-    endMs({ endDate: nextEnd }) !== endMs(period);
+    nextStart.getTime() !== oldStart.getTime() || endMs({ endDate: nextEnd }) !== endMs(period);
+
+  // §3: NARX o'zgarsa, muzlagan (tranzaksiyali) kun bo'lmasligi shart - aks holda
+  // o'tmishdagi hisobot jimgina qayta yozilardi. Note/kelajak endDate uchun bloklash YO'Q.
+  if (priceChanged) {
+    await assertNoLinkedTransactions(period);
+  }
+
+  // §4/§5: sana o'zgarsa - boshqa davrlar bilan overlap bo'lmasin VA tranzaksiyali
+  // kun davr oralig'idan tashqarida qolib ketmasin (granular - workPeriods kabi).
   if (datesChanged) {
     const others = await CarPrice.find({ car: period.car, _id: { $ne: period._id } });
     assertNoConflict({ startDate: nextStart, endDate: nextEnd }, others);
+
+    const range = await transactedRangeForCarPrice(period._id);
+    if (range) {
+      const outOfRange =
+        nextStart.getTime() > range.min.getTime() ||
+        (nextEnd && nextEnd.getTime() < range.max.getTime());
+      if (outOfRange) {
+        throw new ApiError(
+          409,
+          "Sana oralig'ini o'zgartirib bo'lmaydi: to'lov qilingan kunlar davrdan tashqarida qoladi",
+        );
+      }
+    }
   }
 
   period.startDate = nextStart;
@@ -119,11 +139,6 @@ export const update = async (id, body) => {
   if (body.dailyRateCashback !== undefined) period.dailyRateCashback = Number(body.dailyRateCashback) || 0;
   if (body.monthlyCashback !== undefined) period.monthlyCashback = Number(body.monthlyCashback) || 0;
   if (body.note !== undefined) period.note = body.note;
-
-  // Eski oraliqni save'dan OLDIN olamiz (sana qisqarsa, ochiqda qolgan kunlarni ham
-  // qayta hisoblash uchun ikkala oraliqni qamraymiz).
-  const oldStart = startOfDayTashkent(period.startDate);
-  const oldEnd = period.endDate ? startOfDayTashkent(period.endDate) : null;
 
   await period.save();
 
