@@ -284,6 +284,17 @@ export const hasTransactionsOnDate = async (driverId, date) => {
   return !!(await Transaction.exists({ driver: driverId, date: day }));
 };
 
+// O'sha sanada (Tashkent kuni) haydovchiga biriktirilgan mashinani qaytaradi (§2).
+// coversDay logikasini buildSnapshot bilan AYNI tarzda ishlatadi - shuning uchun
+// jarima/zarar/dam olish o'sha kungi HAQIQIY mashinani oladi, joriy driver.car dan
+// EMAS. Topilmasa null (chaqiruvchi 409 qaytaradi).
+export const carForDriverOnDate = async (driverId, date) => {
+  const t = startOfDayTashkent(date).getTime();
+  const assignments = await CarAssignment.find({ driver: driverId });
+  const assignment = assignments.find((a) => coversDay(a, t)) || null;
+  return assignment ? assignment.car : null;
+};
+
 // Bitta kun planini qayta hisoblaydi (dam olish kuni qo'shilgach/o'chgach sinxron).
 export const syncDay = async (driverId, date) => {
   const driver = await Driver.findById(driverId).populate("car", "plateNumber model");
