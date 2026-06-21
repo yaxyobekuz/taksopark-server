@@ -2,7 +2,8 @@ import Damage from "../../../models/damage.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
-import { settleDriver } from "../../finance/services/settlement.service.js";
+import { settleDriver, reverseCoverageFor } from "../../finance/services/settlement.service.js";
+import { carForDriverOnDate } from "../../payments/services/dailyPlans.service.js";
 
 export const list = async ({ driverId, carId, fromDate, toDate, page = 1, limit = 20 }) => {
   const filter = {};
@@ -40,13 +41,16 @@ export const create = async (body, attachments, currentUser) => {
   }
   const driver = await Driver.findById(body.driverId);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
 
   const incidentDate = startOfDayTashkent(body.incidentDate);
+  // §2: mashina o'sha kungi biriktirishdan olinadi (joriy driver.car emas) - eski
+  // zarar ham o'sha kungi haqiqiy mashinaga bog'lanadi.
+  const carId = await carForDriverOnDate(driver._id, incidentDate);
+  if (!carId) throw new ApiError(409, "Bu sanada haydovchiga mashina biriktirilmagan");
 
   const damage = await Damage.create({
     driver: driver._id,
-    car: driver.car,
+    car: carId,
     amount: body.amount,
     incidentDate,
     attachments,
@@ -58,17 +62,30 @@ export const create = async (body, attachments, currentUser) => {
   return damage;
 };
 
-export const update = async (id, body) => {
+export const update = async (id, body, currentUser) => {
   const damage = await Damage.findById(id);
   if (!damage) throw new ApiError(404, "Zarar topilmadi");
   if (body.note !== undefined) damage.note = body.note;
-  if (body.amount !== undefined) damage.amount = body.amount;
+
+  const amountChanged = body.amount !== undefined && Number(body.amount) !== damage.amount;
+  if (body.amount !== undefined) damage.amount = Number(body.amount);
   await damage.save();
+
+  // Summa o'zgarsa: eski coverage'ni to'liq teskari qaytaramiz, so'ng settlement
+  // yangi miqdorni qaytadan qoplaydi (§9, §10).
+  if (amountChanged) {
+    await reverseCoverageFor(damage.driver, "damage", damage._id, currentUser._id);
+    await settleDriver(damage.driver, currentUser._id);
+  }
   return damage;
 };
 
-export const remove = async (id) => {
+export const remove = async (id, currentUser) => {
   const damage = await Damage.findById(id);
   if (!damage) throw new ApiError(404, "Zarar topilmadi");
+  const driverId = damage.driver;
+  // Zarar o'chsa, undan qoplangan pul (depozit/keshbek) manbaga qaytarilishi shart (§9).
+  await reverseCoverageFor(driverId, "damage", damage._id, currentUser._id);
   await damage.deleteOne();
+  await settleDriver(driverId, currentUser._id);
 };

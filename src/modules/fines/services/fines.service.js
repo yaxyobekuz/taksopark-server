@@ -2,7 +2,8 @@ import Fine from "../../../models/fine.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
-import { settleDriver } from "../../finance/services/settlement.service.js";
+import { settleDriver, reverseCoverageFor } from "../../finance/services/settlement.service.js";
+import { carForDriverOnDate } from "../../payments/services/dailyPlans.service.js";
 
 export const list = async ({ driverId, carId, fromDate, toDate, page = 1, limit = 20 }) => {
   const filter = {};
@@ -40,13 +41,16 @@ export const create = async (body, attachments, currentUser) => {
   }
   const driver = await Driver.findById(body.driverId);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
 
   const issueDate = startOfDayTashkent(body.issueDate);
+  // §2: mashina o'sha kungi biriktirishdan olinadi (joriy driver.car emas) - eski
+  // jarima ham o'sha kungi haqiqiy mashinaga bog'lanadi.
+  const carId = await carForDriverOnDate(driver._id, issueDate);
+  if (!carId) throw new ApiError(409, "Bu sanada haydovchiga mashina biriktirilmagan");
 
   const fine = await Fine.create({
     driver: driver._id,
-    car: driver.car,
+    car: carId,
     amount: body.amount,
     issueDate,
     attachments,
@@ -58,17 +62,30 @@ export const create = async (body, attachments, currentUser) => {
   return fine;
 };
 
-export const update = async (id, body) => {
+export const update = async (id, body, currentUser) => {
   const fine = await Fine.findById(id);
   if (!fine) throw new ApiError(404, "Jarima topilmadi");
   if (body.note !== undefined) fine.note = body.note;
-  if (body.amount !== undefined) fine.amount = body.amount;
+
+  const amountChanged = body.amount !== undefined && Number(body.amount) !== fine.amount;
+  if (body.amount !== undefined) fine.amount = Number(body.amount);
   await fine.save();
+
+  // Summa o'zgarsa: eski coverage'ni to'liq teskari qaytaramiz, so'ng settlement
+  // yangi (kichraygan/oshgan) miqdorni qaytadan qoplaydi (§9, §10).
+  if (amountChanged) {
+    await reverseCoverageFor(fine.driver, "fine", fine._id, currentUser._id);
+    await settleDriver(fine.driver, currentUser._id);
+  }
   return fine;
 };
 
-export const remove = async (id) => {
+export const remove = async (id, currentUser) => {
   const fine = await Fine.findById(id);
   if (!fine) throw new ApiError(404, "Jarima topilmadi");
+  const driverId = fine.driver;
+  // Jarima o'chsa, undan qoplangan pul (depozit/keshbek) manbaga qaytarilishi shart (§9).
+  await reverseCoverageFor(driverId, "fine", fine._id, currentUser._id);
   await fine.deleteOne();
+  await settleDriver(driverId, currentUser._id);
 };
