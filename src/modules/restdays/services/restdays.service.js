@@ -2,7 +2,7 @@ import RestDay from "../../../models/restDay.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent, addDays, addMonths, endOfDayTashkent, dateKeyTashkent } from "../../../utils/timezone.js";
-import { hasTransactionsOnDate, syncDay } from "../../payments/services/dailyPlans.service.js";
+import { hasTransactionsOnDate, syncDay, carForDriverOnDate } from "../../payments/services/dailyPlans.service.js";
 
 export const isRestDay = async (driverId, date) => {
   const day = startOfDayTashkent(date);
@@ -34,9 +34,11 @@ export const list = async ({ driverId, fromDate, toDate, page = 1, limit = 20 })
 export const create = async (body, currentUser) => {
   const driver = await Driver.findById(body.driverId);
   if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
-  if (!driver.car) throw new ApiError(409, "Haydovchiga mashina biriktirilmagan");
 
   const date = startOfDayTashkent(body.date);
+  // §2: mashina o'sha kungi biriktirishdan olinadi (joriy driver.car emas).
+  const carId = await carForDriverOnDate(driver._id, date);
+  if (!carId) throw new ApiError(409, "Bu sanada haydovchiga mashina biriktirilmagan");
 
   // Kunlik to'lov qilingan kunni dam olish deb belgilab bo'lmaydi.
   if (await hasTransactionsOnDate(driver._id, date)) {
@@ -47,7 +49,7 @@ export const create = async (body, currentUser) => {
   try {
     restDay = await RestDay.create({
       driver: driver._id,
-      car: driver.car,
+      car: carId,
       date,
       note: body.note || "",
       createdBy: currentUser._id,
