@@ -106,6 +106,13 @@ export const depositBalanceForDriver = async (driverId) => {
   return dep.plus - dep.minus;
 };
 
+// SOF depozit kirim/chiqim/balans (depozit sahifasi kartalari uchun). Faqat depozit
+// ledgeridan (qo'lda kirim/chiqim + avtomatik qoplash chiqimlari) - keshbek aralashmaydi.
+export const depositBreakdownForDriver = async (driverId) => {
+  const dep = await signedSum(DepositTransaction, driverId, DEPOSIT_TX_TYPE.IN, DEPOSIT_TX_TYPE.OUT);
+  return { totalIn: dep.plus, totalOut: dep.minus, balance: dep.plus - dep.minus };
+};
+
 // Bir nechta haydovchi uchun jami ko'rsatkichlar (Hisobotlar/overview uchun).
 export const totalsForDrivers = async (driverIds) => {
   const totals = { debt: 0, available: 0, cashbackAccrued: 0, cashbackPayout: 0, fines: 0, damages: 0 };

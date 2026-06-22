@@ -5,11 +5,12 @@ import ApiError from "../../../utils/ApiError.js";
 import * as account from "./account.service.js";
 import { settleDriver } from "./settlement.service.js";
 
-// Depozit balansi = haydovchining UMUMIY hisob qoldig'i (§10): qo'lda kirim/chiqim
-// + kunlik to'lov ortig'i − kunlik kamomad − jarima/zarar. Hech qachon saqlanmaydi,
-// har doim manbalardan DERIVED.
-
-export const balanceForDriver = async (driverId) => account.availableForDriver(driverId);
+// Depozit balansi = SOF depozit qoldig'i = Σ(kirim) − Σ(chiqim). Bu haydovchining
+// depozit hisobida haqiqatan yotgan pul - kunlik ijarani qoplaganda chiqim, ortiqcha
+// to'lovda kirim bo'ladi. Hech qachon saqlanmaydi, manbadan DERIVED.
+// (Eslatma: umumiy moliyaviy holat/qarz alohida - account.service'da; bu sahifa FAQAT
+// depozitga aloqador ko'rsatkichlar bilan ishlaydi.)
+export const balanceForDriver = async (driverId) => account.depositBalanceForDriver(driverId);
 
 // Umumiy sahifa: depozitli davri bor barcha haydovchilar + balans/qarz.
 export const summaryAll = async () => {
@@ -69,11 +70,13 @@ export const depositLedger = async (driverId) => {
 export const detailForDriver = async (driverId) => {
   // Ko'rishdan oldin mavjud depozit/keshbek bilan qarzlarni qoplaymiz (aniq tranzaksiyalar).
   await settleDriver(driverId);
-  const [acc, ledger] = await Promise.all([
-    account.computeForDriver(driverId),
+  const [breakdown, ledger] = await Promise.all([
+    account.depositBreakdownForDriver(driverId),
     depositLedger(driverId),
   ]);
-  return { balance: acc.available, debt: acc.debt, account: acc, ledger };
+  // FAQAT depozit: jami kirim, jami chiqim, sof balans (kirim−chiqim) + depozit harakatlari.
+  // Umumiy hisob/qarz bu sahifaga aralashtirilmaydi (Kunlik to'lovlar / Hisobotlarda ko'rinadi).
+  return { ...breakdown, ledger };
 };
 
 // Depozit harakati (kirim / chiqim). Chiqim umumiy hisob qoldig'idan oshmaydi.
