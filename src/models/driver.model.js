@@ -32,6 +32,13 @@ const driverSchema = new mongoose.Schema(
 
     car: { type: mongoose.Schema.Types.ObjectId, ref: "Car", default: null, index: true },
 
+    // Kunlik to'lov qarzini depozit/keshbekdan AVTOMATIK qoplash yoqilganmi (§10).
+    // O'chirilganda settleDriver bu haydovchining KUNLIK majburiyatlarini qoplamaydi
+    // (jarima/zarar baribir qoplanadi). Bu admin auto-qoplangan kunni o'chirib, ish/
+    // narx/biriktirish davrini tahrirlashga imkon beradi - aks holda pul qaytishi
+    // bilanoq settlement uni qayta qoplab "loop" hosil qilardi.
+    autoSettleDaily: { type: Boolean, default: true },
+
     notes: { type: String, default: "" },
     documents: { type: [driverDocumentSchema], default: [] },
   },

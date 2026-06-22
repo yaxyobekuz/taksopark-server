@@ -1,9 +1,11 @@
 import DailyPlan from "../../../models/dailyPlan.model.js";
+import Driver from "../../../models/driver.model.js";
 import Transaction, { TX_TYPE, TX_SOURCE } from "../../../models/transaction.model.js";
 import DepositTransaction, { DEPOSIT_TX_TYPE } from "../../../models/depositTransaction.model.js";
 import CashbackTransaction, { CASHBACK_TX_TYPE } from "../../../models/cashbackTransaction.model.js";
 import Fine from "../../../models/fine.model.js";
 import Damage from "../../../models/damage.model.js";
+import ApiError from "../../../utils/ApiError.js";
 import { ensureUpToToday, paidByPlan } from "../../payments/services/dailyPlans.service.js";
 import * as workPeriods from "../../workPeriods/services/workPeriods.service.js";
 import * as cashbackAccrual from "./cashbackAccrual.service.js";
@@ -51,13 +53,17 @@ export const coverageByRef = async (driverId, kind) => {
   return map;
 };
 
-const buildObligations = async (driverId) => {
-  const plans = await DailyPlan.find({ driver: driverId, planAmount: { $gt: 0 } }).select("date planAmount");
-  const paid = await paidByPlan(plans.map((p) => p._id));
+// includeDaily=false bo'lsa KUNLIK majburiyatlar qoplash ro'yxatiga kirmaydi
+// (haydovchining autoSettleDaily o'chirilgan) - jarima/zarar baribir qoplanadi.
+const buildObligations = async (driverId, { includeDaily = true } = {}) => {
   const out = [];
-  for (const p of plans) {
-    const remaining = p.planAmount - (paid.get(String(p._id)) || 0);
-    if (remaining > 0) out.push({ kind: "daily", ref: p._id, date: p.date, outstanding: remaining });
+  if (includeDaily) {
+    const plans = await DailyPlan.find({ driver: driverId, planAmount: { $gt: 0 } }).select("date planAmount");
+    const paid = await paidByPlan(plans.map((p) => p._id));
+    for (const p of plans) {
+      const remaining = p.planAmount - (paid.get(String(p._id)) || 0);
+      if (remaining > 0) out.push({ kind: "daily", ref: p._id, date: p.date, outstanding: remaining });
+    }
   }
   const [fines, damages, finesCov, damagesCov] = await Promise.all([
     Fine.find({ driver: driverId }).select("issueDate amount"),
@@ -176,7 +182,13 @@ const settleDriverImpl = async (driverId, userId = null) => {
 
   if (depositBal <= 0 && cbTotal <= 0) return;
 
-  const obligations = await buildObligations(driverId);
+  // Kunlik auto-qoplash o'chirilgan bo'lsa, kunlik majburiyatlar qoplanmaydi (loop'ni
+  // uzadi: admin auto-qoplangan kunni o'chirgach, qaytgan pul kunlikni qayta qoplamaydi).
+  const driver = await Driver.findById(driverId).select("autoSettleDaily");
+  const includeDaily = driver?.autoSettleDaily !== false;
+
+  const obligations = await buildObligations(driverId, { includeDaily });
+  if (!obligations.length) return;
 
   // Manbadan chiqim + (kunlik bo'lsa) plan to'lovi ATOMAR yoziladi (§6): ikkalasi
   // birga yoki hech biri - pul yarim yo'lda qolmaydi.
@@ -276,6 +288,43 @@ const settleDriverImpl = async (driverId, userId = null) => {
     if (depositBal <= 0 && cbTotal <= 0) break;
   }
 };
+
+// Bitta kunlik plan uchun AVTOMATIK qoplashni butunlay olib tashlaydi (admin shu kunni
+// "bo'shatib", ish/narx/biriktirish davrini tahrirlashi uchun). Auto-qoplash DERIVED
+// (§11A) - manba o'zgarsa qayta hisoblanadigan yozuv, shuning uchun teskari reversal
+// emas, to'g'ridan-to'g'ri OLIB TASHLANADI; pul depozit/keshbekka qaytadi (balanslar
+// summadan derived - chiqim yozuvi o'chgani uchun avtomatik tiklanadi).
+//   - kunlik planga bog'langan "to'lov" yozuvi (source: deposit/cashback)
+//   - shu planni qoplagan depozit OUT / keshbek PAYOUT auto chiqimlari (coverage.ref)
+// MUHIM: bu faqat haydovchining autoSettleDaily O'CHIRILGAN holatida ma'noli - aks
+// holda keyingi settleDriver darhol qayta qoplab qo'yadi (chaqiruvchi servis tekshiradi).
+export const releaseDailyCoverage = (planId) =>
+  withTransaction(async (session) => {
+    const pid = toObjectId(planId);
+    const plan = await DailyPlan.findById(pid).select("driver").session(session);
+    if (!plan) throw new ApiError(404, "Kunlik plan topilmadi");
+    const did = plan.driver;
+
+    await Transaction.deleteMany({
+      dailyPlan: pid,
+      source: { $in: [TX_SOURCE.DEPOSIT, TX_SOURCE.CASHBACK] },
+    }).session(session);
+    await DepositTransaction.deleteMany({
+      driver: did,
+      type: DEPOSIT_TX_TYPE.OUT,
+      auto: true,
+      "coverage.kind": "daily",
+      "coverage.ref": pid,
+    }).session(session);
+    await CashbackTransaction.deleteMany({
+      driver: did,
+      type: CASHBACK_TX_TYPE.PAYOUT,
+      auto: true,
+      "coverage.kind": "daily",
+      "coverage.ref": pid,
+    }).session(session);
+    return did;
+  });
 
 // Concurrency himoyasi: settleDriver ko'p joydan (depozit kirim, sahifa o'qish,
 // kunlik job) bir vaqtda chaqiriladi. Himoyasiz bo'lsa parallel ishlashlar bir xil
