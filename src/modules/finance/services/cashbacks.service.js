@@ -54,12 +54,13 @@ export const detailForDriver = async (driverId) => {
     budget -= available;
     return { ...m, available };
   });
+  // FAQAT keshbek ko'rsatkichlari + keshbek harakatlari. `accountDebt` faqat payout
+  // nega cheklanganini izohlash uchun (umumiy qarz bo'lsa keshbek avval qarzni qoplaydi).
   return {
     driver: data.driver,
     months,
     totals: { ...data.totals, available: Math.max(0, Math.min(data.totals.monthlyAvailable, acc.available)) },
     accountDebt: acc.debt,
-    account: acc,
     ledger,
   };
 };
