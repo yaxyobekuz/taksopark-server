@@ -12,11 +12,13 @@ import {
   addDocumentSchema,
   updateDocumentSchema,
   docIdSchema,
+  autoSettleSchema,
 } from "./validators/drivers.validator.js";
 import list from "./handlers/list.handler.js";
 import getById from "./handlers/getById.handler.js";
 import create from "./handlers/create.handler.js";
 import update from "./handlers/update.handler.js";
+import setAutoSettle from "./handlers/setAutoSettle.handler.js";
 import addDocument from "./handlers/addDocument.handler.js";
 import updateDocument from "./handlers/updateDocument.handler.js";
 import removeDocument from "./handlers/removeDocument.handler.js";
@@ -27,6 +29,7 @@ router.get("/", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), valida
 router.get("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_READ), validate(idSchema), getById);
 router.post("/", requireAuth, requirePermission(PERMISSIONS.DRIVERS_CREATE), singleUploader("drivers", "photo"), validate(createSchema), create);
 router.patch("/:id", requireAuth, requirePermission(PERMISSIONS.DRIVERS_UPDATE), singleUploader("drivers", "photo"), validate(updateSchema), update);
+router.patch("/:id/auto-settle", requireAuth, requirePermission(PERMISSIONS.PAYMENTS_MANAGE), validate(autoSettleSchema), setAutoSettle);
 
 router.post(
   "/:id/documents",

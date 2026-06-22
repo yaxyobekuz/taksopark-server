@@ -43,6 +43,11 @@ export const updateSchema = z.object({
   }),
 });
 
+export const autoSettleSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({ enabled: z.boolean() }),
+});
+
 const dateField = z.preprocess(
   (v) => (v === "" || v == null ? null : v),
   z.coerce.date().nullable().optional(),

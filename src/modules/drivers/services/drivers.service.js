@@ -5,6 +5,7 @@ import { removeFileByUrl, fileToPublicUrl } from "../../../utils/fileStorage.js"
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import * as workPeriodsService from "../../workPeriods/services/workPeriods.service.js";
 import * as carAssignmentsService from "../../carAssignments/services/carAssignments.service.js";
+import { settleDriver } from "../../finance/services/settlement.service.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -109,6 +110,19 @@ export const update = async (id, body) => {
   await driver.save();
   if (oldPhotoUrl) removeFileByUrl(oldPhotoUrl);
   return driver;
+};
+
+// Kunlik to'lovni depozit/keshbekdan avtomatik qoplashni yoqish/o'chirish (§10).
+// Yoqilganda - barcha qoplanmagan kunlik qarz darhol qayta qoplanadi (settleDriver).
+// O'chirilganda - mavjud auto-qoplash JOYIDA qoladi; admin kerakli kunlarni
+// "Avtomatik qoplash bekor qilish" orqali bo'shatadi.
+export const setAutoSettleDaily = async (id, enabled) => {
+  const driver = await Driver.findById(id);
+  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
+  driver.autoSettleDaily = enabled;
+  await driver.save();
+  if (enabled) await settleDriver(driver._id);
+  return getById(id);
 };
 
 const buildFilesPayload = (files = []) =>
