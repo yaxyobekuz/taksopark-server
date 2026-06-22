@@ -211,6 +211,23 @@ export const monthView = async ({ driverId, year, month }) => {
   return { driver, plans: decorated, summary };
 };
 
+// Bitta kun ko'rinishi: o'sha kun uchun planni ta'minlaydi va to'langan/qarz bilan
+// qaytaradi (Moliya "Kunlik to'lovlar" sahifasi - bir kun, ko'p haydovchi). Plan
+// shu kunga to'g'ri kelmasa (ish davri yo'q / kelajak kun) `plan: null`.
+export const dayView = async ({ driverId, date }) => {
+  const driver = await Driver.findById(driverId).populate("car", "plateNumber model");
+  if (!driver) throw new ApiError(404, "Haydovchi topilmadi");
+
+  const day = startOfDayTashkent(date);
+  await ensureRange({ driver, fromDate: day, toDate: day });
+
+  const plan = await DailyPlan.findOne({ driver: driverId, date: day });
+  if (!plan) return { driver, plan: null };
+
+  const paid = await paidByPlan([plan._id]);
+  return { driver, plan: decoratePlan(plan, paid.get(String(plan._id))) };
+};
+
 // Bitta plan + uning DERIVED qiymatlari.
 export const getPlanById = async (id) => {
   const plan = await DailyPlan.findById(id)
