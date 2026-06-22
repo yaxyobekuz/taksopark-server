@@ -1,9 +1,10 @@
 import Transaction, { TX_TYPE, TX_SOURCE } from "../../../models/transaction.model.js";
 import DailyPlan from "../../../models/dailyPlan.model.js";
+import Driver from "../../../models/driver.model.js";
 import DepositTransaction, { DEPOSIT_TX_TYPE } from "../../../models/depositTransaction.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { paidByPlan, getPlanById } from "./dailyPlans.service.js";
-import { settleDriver } from "../../finance/services/settlement.service.js";
+import { settleDriver, releaseDailyCoverage } from "../../finance/services/settlement.service.js";
 
 // Plan uchun barcha tranzaksiyalar (audit izi - eskidan yangiga).
 export const listByPlan = async (dailyPlanId) => {
@@ -106,6 +107,24 @@ export const reverseTransaction = async (transactionId, { note }, currentUser) =
   });
 
   return getPlanById(original.dailyPlan);
+};
+
+// Kunlik plandagi AVTOMATIK (depozit/keshbek) qoplashni o'chiradi - pul manbaga
+// qaytadi, plan "tranzaksiyasiz" bo'lib qoladi va ish/narx/biriktirish davrini
+// tahrirlash mumkin bo'ladi (referensial qulf bo'shaydi). Faqat haydovchining kunlik
+// auto-qoplashi O'CHIRILGAN bo'lsa ruxsat - aks holda settlement darhol qayta qoplaydi.
+export const releaseAutoCoverage = async (dailyPlanId) => {
+  const plan = await DailyPlan.findById(dailyPlanId).select("driver");
+  if (!plan) throw new ApiError(404, "Kunlik plan topilmadi");
+  const driver = await Driver.findById(plan.driver).select("autoSettleDaily");
+  if (driver?.autoSettleDaily !== false) {
+    throw new ApiError(
+      409,
+      "Avval shu haydovchining kunlik avtomatik qoplashini o'chiring",
+    );
+  }
+  await releaseDailyCoverage(plan._id);
+  return getPlanById(plan._id);
 };
 
 export { paidByPlan };
