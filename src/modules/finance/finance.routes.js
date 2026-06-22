@@ -5,13 +5,14 @@ import validate from "../../middleware/validate.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
 import {
   monthQuerySchema,
+  dateQuerySchema,
   driverIdParamSchema,
   txIdParamSchema,
   cashbackPayoutSchema,
   depositMovementSchema,
 } from "./validators/finance.validator.js";
 import overview from "./handlers/overview.handler.js";
-import dailyPayments from "./handlers/dailyPayments.handler.js";
+import dailyPayments, { dailyPaymentsByDate } from "./handlers/dailyPayments.handler.js";
 import {
   cashbacksList,
   cashbackDriver,
@@ -32,6 +33,7 @@ const manage = requirePermission(PERMISSIONS.PAYMENTS_MANAGE);
 // Hisobotlar / umumiy kunlik to'lovlar
 router.get("/overview", requireAuth, read, validate(monthQuerySchema), overview);
 router.get("/daily-payments", requireAuth, read, validate(monthQuerySchema), dailyPayments);
+router.get("/daily-payments/by-date", requireAuth, read, validate(dateQuerySchema), dailyPaymentsByDate);
 
 // Keshbeklar
 router.get("/cashbacks", requireAuth, read, cashbacksList);

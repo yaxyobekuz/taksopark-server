@@ -10,6 +10,12 @@ export const monthQuerySchema = z.object({
   }),
 });
 
+export const dateQuerySchema = z.object({
+  query: z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri (YYYY-MM-DD)"),
+  }),
+});
+
 export const driverIdParamSchema = z.object({
   params: z.object({ driverId: objectId }),
 });

@@ -6,4 +6,9 @@ const dailyPayments = asyncHandler(async (req, res) => {
   res.json({ success: true, data });
 });
 
+export const dailyPaymentsByDate = asyncHandler(async (req, res) => {
+  const data = await reports.dailyPlansForDate({ date: req.query.date });
+  res.json({ success: true, data });
+});
+
 export default dailyPayments;

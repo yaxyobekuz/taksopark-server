@@ -7,7 +7,7 @@ import Fine from "../../../models/fine.model.js";
 import Damage from "../../../models/damage.model.js";
 import Driver from "../../../models/driver.model.js";
 import { startOfDayTashkent, addMonths, addDays, dateKeyTashkent } from "../../../utils/timezone.js";
-import { monthView } from "../../payments/services/dailyPlans.service.js";
+import { monthView, dayView } from "../../payments/services/dailyPlans.service.js";
 import * as cashbackAccrual from "./cashbackAccrual.service.js";
 import { settleDriver } from "./settlement.service.js";
 
@@ -100,6 +100,47 @@ export const dailyPlansForMonth = async ({ year, month }) => {
   rows.sort((a, b) => {
     const d = new Date(b.date).getTime() - new Date(a.date).getTime();
     if (d !== 0) return d;
+    return (a.driver.firstName || "").localeCompare(b.driver.firstName || "");
+  });
+
+  return { rows, totals };
+};
+
+// Umumiy "Kunlik to'lovlar" sahifasi (kun bo'yicha): tanlangan BITTA kunda to'lov
+// majburiyati bo'lgan har bir haydovchining kunlik plani - reja/to'langan/qarz bilan.
+// Har bir qatorda haydovchining `autoSettleDaily` holati ham bor (modal toggle uchun).
+export const dailyPlansForDate = async ({ date }) => {
+  const day = startOfDayTashkent(new Date(`${date}T00:00:00.000Z`));
+  // Shu kunni qamragan ish davri bor haydovchilar.
+  const driverIds = await WorkPeriod.distinct("driver", {
+    startDate: { $lte: day },
+    $or: [{ endDate: null }, { endDate: { $gte: day } }],
+  });
+
+  const rows = [];
+  const totals = { planTotal: 0, paidTotal: 0, debtTotal: 0 };
+  for (const id of driverIds) {
+    await settleDriver(id);
+    const { driver, plan } = await dayView({ driverId: id, date: day });
+    if (!plan) continue;
+    rows.push({
+      ...plan,
+      driver: {
+        _id: driver._id,
+        firstName: driver.firstName,
+        lastName: driver.lastName,
+        phone: driver.phone,
+        autoSettleDaily: driver.autoSettleDaily !== false,
+      },
+    });
+    totals.planTotal += plan.planAmount;
+    totals.paidTotal += plan.paidAmount;
+    totals.debtTotal += plan.debt;
+  }
+
+  // Qarzi borlar tepada, keyin ism bo'yicha.
+  rows.sort((a, b) => {
+    if (b.debt !== a.debt) return b.debt - a.debt;
     return (a.driver.firstName || "").localeCompare(b.driver.firstName || "");
   });
 
