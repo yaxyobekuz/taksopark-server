@@ -3,7 +3,6 @@ import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { monthsForDriver } from "./cashbackAccrual.service.js";
-import * as account from "./account.service.js";
 import { settleDriver } from "./settlement.service.js";
 
 const sod = (d) => startOfDayTashkent(d);
@@ -11,19 +10,19 @@ const sod = (d) => startOfDayTashkent(d);
 export { monthsForDriver };
 
 // Umumiy sahifa: keshbek davri bor barcha haydovchilar + jami.
-// "available" - to'lash mumkin bo'lgan keshbek = oylik qoldiq, lekin haydovchining
-// umumiy hisob qoldig'idan (account) oshmaydi (qarzga to'lab bo'lmaydi - §10).
+// "available" = SOF keshbek qoldig'i = Σ(hisoblangan − berilgan), oyma-oy. Keshbek
+// haydovchining ishlab topgan puli - umumiy hisob qarzidan QAT'I NAZAR yechib olinadi
+// (egasi qarori 2026-06-24). Hisob qarzi bu yerga ARALASHTIRILMAYDI.
 export const summaryAll = async () => {
   const driverIds = await WorkPeriod.distinct("driver", { tariff: TARIFF.CASHBACK });
   const rows = [];
   for (const id of driverIds) {
     const { driver, totals } = await monthsForDriver(id);
-    const acc = await account.computeForDriver(id);
     rows.push({
       driver,
       accrued: totals.accrued,
       paidOut: totals.paidOut,
-      available: Math.min(totals.monthlyAvailable, acc.available),
+      available: totals.monthlyAvailable,
     });
   }
   rows.sort((a, b) => b.available - a.available);
@@ -39,28 +38,25 @@ export const summaryAll = async () => {
   return { rows, totals };
 };
 
-// Bitta haydovchining keshbek oylari + account qoldig'i bilan to'ldirilgan "available".
+// Bitta haydovchining keshbek oylari + SOF berilishi kerak (hisoblangan − berilgan).
 export const detailForDriver = async (driverId) => {
   await settleDriver(driverId);
-  const [data, acc, ledger] = await Promise.all([
+  const [data, ledger] = await Promise.all([
     monthsForDriver(driverId),
-    account.computeForDriver(driverId),
     cashbackLedger(driverId),
   ]);
-  // Account qoldig'ini oylar bo'yicha (eng yangi oydan) taqsimlab "available" beramiz.
-  let budget = acc.available;
-  const months = data.months.map((m) => {
-    const available = Math.max(0, Math.min(m.monthlyAvailable, budget));
-    budget -= available;
-    return { ...m, available };
-  });
-  // FAQAT keshbek ko'rsatkichlari + keshbek harakatlari. `accountDebt` faqat payout
-  // nega cheklanganini izohlash uchun (umumiy qarz bo'lsa keshbek avval qarzni qoplaydi).
+  // FAQAT keshbek: har oy "available" = sof oylik qoldiq (monthlyAvailable), jami
+  // "available" = sof berilishi kerak. Hisob qarzi ARALASHTIRILMAYDI - keshbek
+  // haydovchining puli, qarzdan qat'i nazar to'liq yechib olinadi (egasi qarori).
+  const months = data.months.map((m) => ({ ...m, available: m.monthlyAvailable }));
   return {
     driver: data.driver,
     months,
-    totals: { ...data.totals, available: Math.max(0, Math.min(data.totals.monthlyAvailable, acc.available)) },
-    accountDebt: acc.debt,
+    totals: {
+      accrued: data.totals.accrued,
+      paidOut: data.totals.paidOut,
+      available: data.totals.monthlyAvailable,
+    },
     ledger,
   };
 };
@@ -115,7 +111,8 @@ export const cashbackLedger = async (driverId) => {
   return entries;
 };
 
-// Keshbek payout (avans). Oylik qoldiqdan VA umumiy hisob qoldig'idan oshmaydi.
+// Keshbek payout (yechib olish). Faqat o'sha oyning SOF keshbek qoldig'idan oshmaydi -
+// umumiy hisob qarzi cheklamaydi (keshbek = haydovchining puli, egasi qarori 2026-06-24).
 export const createPayout = async (driverId, { monthStart, amount, note }, currentUser) => {
   const value = Number(amount);
   if (!Number.isFinite(value) || value <= 0) {
@@ -126,8 +123,7 @@ export const createPayout = async (driverId, { monthStart, amount, note }, curre
   const month = months.find((m) => m.monthStart.getTime() === target.getTime());
   if (!month) throw new ApiError(404, "Keshbek oyi topilmadi");
 
-  const acc = await account.computeForDriver(driverId);
-  const cap = Math.min(month.monthlyAvailable, acc.available);
+  const cap = month.monthlyAvailable;
   if (value > cap) {
     throw new ApiError(409, `To'lov mavjud keshbek qoldig'idan (${cap}) oshmasligi kerak`);
   }
