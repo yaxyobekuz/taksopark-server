@@ -17,13 +17,13 @@ import {
   cashbacksList,
   cashbackDriver,
   cashbackPayout,
-  cashbackReverse,
+  cashbackDelete,
 } from "./handlers/cashbacks.handler.js";
 import {
   depositsList,
   depositDriver,
   depositMovement,
-  depositReverse,
+  depositDelete,
 } from "./handlers/deposits.handler.js";
 
 const router = Router();
@@ -39,12 +39,12 @@ router.get("/daily-payments/by-date", requireAuth, read, validate(dateQuerySchem
 router.get("/cashbacks", requireAuth, read, cashbacksList);
 router.get("/cashbacks/:driverId", requireAuth, read, validate(driverIdParamSchema), cashbackDriver);
 router.post("/cashbacks/payout", requireAuth, manage, validate(cashbackPayoutSchema), cashbackPayout);
-router.post("/cashbacks/transactions/:id/reverse", requireAuth, manage, validate(txIdParamSchema), cashbackReverse);
+router.delete("/cashbacks/transactions/:id", requireAuth, manage, validate(txIdParamSchema), cashbackDelete);
 
 // Depozitlar
 router.get("/deposits", requireAuth, read, depositsList);
 router.get("/deposits/:driverId", requireAuth, read, validate(driverIdParamSchema), depositDriver);
 router.post("/deposits/movement", requireAuth, manage, validate(depositMovementSchema), depositMovement);
-router.post("/deposits/transactions/:id/reverse", requireAuth, manage, validate(txIdParamSchema), depositReverse);
+router.delete("/deposits/transactions/:id", requireAuth, manage, validate(txIdParamSchema), depositDelete);
 
 export default router;

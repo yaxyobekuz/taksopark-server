@@ -17,7 +17,7 @@ export const depositMovement = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data, message: "Depozit harakati yozildi" });
 });
 
-export const depositReverse = asyncHandler(async (req, res) => {
-  const data = await deposits.reverseMovement(req.params.id, req.user);
-  res.status(201).json({ success: true, data, message: "Tranzaksiya bekor qilindi" });
+export const depositDelete = asyncHandler(async (req, res) => {
+  const data = await deposits.deleteMovement(req.params.id);
+  res.json({ success: true, data, message: "Tranzaksiya o'chirildi" });
 });

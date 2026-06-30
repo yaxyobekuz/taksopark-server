@@ -1,9 +1,10 @@
 import CashbackTransaction, { CASHBACK_TX_TYPE } from "../../../models/cashbackTransaction.model.js";
 import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
+import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { monthsForDriver } from "./cashbackAccrual.service.js";
-import { settleDriver } from "./settlement.service.js";
+import { settleDriver, releaseDailyCoverage } from "./settlement.service.js";
 
 const sod = (d) => startOfDayTashkent(d);
 
@@ -78,7 +79,6 @@ export const cashbackLedger = async (driverId) => {
     monthsForDriver(driverId),
     CashbackTransaction.find({ driver: driverId }).sort({ createdAt: 1 }),
   ]);
-  const reversedSet = new Set(txs.filter((t) => t.reverses).map((t) => String(t.reverses)));
   const entries = [];
   for (const m of cb.months) {
     if (m.accrued > 0)
@@ -98,7 +98,9 @@ export const cashbackLedger = async (driverId) => {
       label,
       note: t.note || "",
       amount,
-      reversible: !t.auto && !isReversal && !reversedSet.has(String(t._id)),
+      // O'chirib bo'ladi: qo'lda berilgan keshbek + avtomatik KUNLIK qoplash (juftligi
+      // bilan o'chadi). Jarima/zarar qoplashi bu yerda emas (tegishli jarima/zardan).
+      deletable: !(t.auto && t.coverage && t.coverage.kind !== "daily"),
     });
   }
   entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -139,23 +141,30 @@ export const createPayout = async (driverId, { monthStart, amount, note }, curre
   return detailForDriver(driverId);
 };
 
-export const reversePayout = async (transactionId, currentUser) => {
-  const original = await CashbackTransaction.findById(transactionId);
-  if (!original) throw new ApiError(404, "Tranzaksiya topilmadi");
-  if (original.type === CASHBACK_TX_TYPE.REVERSAL) {
-    throw new ApiError(409, "Tuzatuvchi tranzaksiyani qayta tuzatib bo'lmaydi");
-  }
-  const already = await CashbackTransaction.exists({ reverses: original._id });
-  if (already) throw new ApiError(409, "Bu tranzaksiya allaqachon bekor qilingan");
+// Keshbek tranzaksiyasini BUTUNLAY o'chiradi (hard delete - "Tuzatish" yozuvi YO'Q).
+// Berilgan/qoldiq keshbek tranzaksiyalardan DERIVED - yozuv o'chgach o'z-o'zidan
+// to'g'ri bo'ladi. Holatlar:
+//   - Avtomatik KUNLIK qoplash (auto PAYOUT, coverage.kind=daily): juftligi (kunlik plan
+//     to'lovi) bilan birga o'chiriladi, keshbek qoldig'i qaytadi (faqat autoSettleDaily
+//     o'chirilgan bo'lsa).
+//   - Jarima/zarar qoplash payout'i: bu yerda o'chirilmaydi (tegishli jarima/zararni tahrirlang).
+//   - Qo'lda berilgan keshbek (payout): to'g'ridan-to'g'ri o'chiriladi (qoldiq ortadi - xavfsiz).
+export const deletePayout = async (transactionId) => {
+  const tx = await CashbackTransaction.findById(transactionId);
+  if (!tx) throw new ApiError(404, "Tranzaksiya topilmadi");
+  const driverId = String(tx.driver);
 
-  await CashbackTransaction.create({
-    driver: original.driver,
-    monthStart: original.monthStart,
-    type: CASHBACK_TX_TYPE.REVERSAL,
-    amount: original.amount,
-    reverses: original._id,
-    note: "Tuzatish",
-    createdBy: currentUser._id,
-  });
-  return detailForDriver(String(original.driver));
+  if (tx.auto && tx.coverage?.kind === "daily" && tx.type === CASHBACK_TX_TYPE.PAYOUT) {
+    const driver = await Driver.findById(tx.driver).select("autoSettleDaily");
+    if (driver?.autoSettleDaily !== false) {
+      throw new ApiError(409, "Avval shu haydovchining kunlik avtomatik qoplashini o'chiring");
+    }
+    await releaseDailyCoverage(tx.coverage.ref);
+    return detailForDriver(driverId);
+  }
+  if (tx.auto && tx.coverage) {
+    throw new ApiError(409, "Jarima/zarar qoplashini bu yerda o'chirib bo'lmaydi - tegishli jarima yoki zararni tahrirlang");
+  }
+  await tx.deleteOne();
+  return detailForDriver(driverId);
 };

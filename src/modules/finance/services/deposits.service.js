@@ -3,7 +3,7 @@ import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import * as account from "./account.service.js";
-import { settleDriver } from "./settlement.service.js";
+import { settleDriver, releaseDailyCoverage } from "./settlement.service.js";
 
 // Depozit balansi = SOF depozit qoldig'i = Σ(kirim) − Σ(chiqim). Bu haydovchining
 // depozit hisobida haqiqatan yotgan pul - kunlik ijarani qoplaganda chiqim, ortiqcha
@@ -42,7 +42,6 @@ const COVER_LABEL = {
 // qoplash chiqimlari "Kunlik ijara/Jarima/Zarar qoplandi" deb belgilanadi.
 export const depositLedger = async (driverId) => {
   const txs = await DepositTransaction.find({ driver: driverId }).sort({ createdAt: 1 });
-  const reversedSet = new Set(txs.filter((t) => t.reverses).map((t) => String(t.reverses)));
   let running = 0;
   const entries = txs.map((t) => {
     const amount = t.type === DEPOSIT_TX_TYPE.IN ? t.amount : -t.amount;
@@ -59,8 +58,9 @@ export const depositLedger = async (driverId) => {
       note: t.note || "",
       amount,
       balance: running,
-      // Faqat qo'lda kirim/chiqim bekor qilinadi (avtomatik qoplash tizim tomonidan).
-      reversible: !t.auto && !t.reverses && !reversedSet.has(String(t._id)),
+      // O'chirib bo'ladi: qo'lda kirim/chiqim + avtomatik KUNLIK qoplash (juftligi bilan
+      // o'chadi). Jarima/zarar qoplashi bu yerda emas - tegishli jarima/zarardan boshqariladi.
+      deletable: !(t.auto && t.coverage && t.coverage.kind !== "daily"),
     };
   });
   entries.reverse();
@@ -131,23 +131,38 @@ export const createMovement = async (driverId, { type, amount, note }, currentUs
   return { balance: await balanceForDriver(driverId) };
 };
 
-export const reverseMovement = async (transactionId, currentUser) => {
-  const original = await DepositTransaction.findById(transactionId);
-  if (!original) throw new ApiError(404, "Tranzaksiya topilmadi");
-  if (original.reverses) {
-    throw new ApiError(409, "Tuzatuvchi tranzaksiyani qayta tuzatib bo'lmaydi");
-  }
-  const already = await DepositTransaction.exists({ reverses: original._id });
-  if (already) throw new ApiError(409, "Bu tranzaksiya allaqachon bekor qilingan");
+// Depozit harakatini BUTUNLAY o'chiradi (hard delete - "Tuzatish" yozuvi YO'Q).
+// Balans Σ(kirim−chiqim) dan DERIVED, shuning uchun yozuv o'chgach o'z-o'zidan to'g'ri
+// bo'ladi. Holatlar:
+//   - Avtomatik KUNLIK qoplash chiqimi (auto OUT, coverage.kind=daily): juftligi (kunlik
+//     plan to'lovi) bilan birga o'chiriladi, pul qaytadi (faqat autoSettleDaily o'chirilgan
+//     bo'lsa - aks holda settlement darhol qayta qoplardi).
+//   - Jarima/zarar qoplash chiqimi: bu yerda o'chirilmaydi (tegishli jarima/zararni tahrirlang).
+//   - Qo'lda kirim/chiqim (yoki "Ortiqcha to'lov" kirim): to'g'ridan-to'g'ri o'chiriladi.
+//     Kirim o'chsa depozit balansi manfiyga tushmasligi tekshiriladi (bu pul qoplashga
+//     allaqachon ishlatilmagan bo'lsin).
+export const deleteMovement = async (transactionId) => {
+  const tx = await DepositTransaction.findById(transactionId);
+  if (!tx) throw new ApiError(404, "Tranzaksiya topilmadi");
+  const driverId = String(tx.driver);
 
-  const opposite = original.type === DEPOSIT_TX_TYPE.IN ? DEPOSIT_TX_TYPE.OUT : DEPOSIT_TX_TYPE.IN;
-  await DepositTransaction.create({
-    driver: original.driver,
-    type: opposite,
-    amount: original.amount,
-    reverses: original._id,
-    note: "Tuzatish",
-    createdBy: currentUser._id,
-  });
-  return { balance: await balanceForDriver(String(original.driver)) };
+  if (tx.auto && tx.coverage?.kind === "daily" && tx.type === DEPOSIT_TX_TYPE.OUT) {
+    const driver = await Driver.findById(tx.driver).select("autoSettleDaily");
+    if (driver?.autoSettleDaily !== false) {
+      throw new ApiError(409, "Avval shu haydovchining kunlik avtomatik qoplashini o'chiring");
+    }
+    await releaseDailyCoverage(tx.coverage.ref);
+    return { balance: await balanceForDriver(driverId) };
+  }
+  if (tx.auto && tx.coverage) {
+    throw new ApiError(409, "Jarima/zarar qoplashini bu yerda o'chirib bo'lmaydi - tegishli jarima yoki zararni tahrirlang");
+  }
+  if (tx.type === DEPOSIT_TX_TYPE.IN) {
+    const bal = await account.depositBalanceForDriver(tx.driver);
+    if (bal - tx.amount < 0) {
+      throw new ApiError(409, "Bu kirim allaqachon kunlik to'lov/qarz qoplashga ishlatilgan - avval o'sha qoplashlarni o'chiring");
+    }
+  }
+  await tx.deleteOne();
+  return { balance: await balanceForDriver(driverId) };
 };

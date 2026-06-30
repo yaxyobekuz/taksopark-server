@@ -20,7 +20,7 @@ export const cashbackPayout = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data, message: "Keshbek to'lovi yozildi" });
 });
 
-export const cashbackReverse = asyncHandler(async (req, res) => {
-  const data = await cashbacks.reversePayout(req.params.id, req.user);
-  res.status(201).json({ success: true, data, message: "Tranzaksiya bekor qilindi" });
+export const cashbackDelete = asyncHandler(async (req, res) => {
+  const data = await cashbacks.deletePayout(req.params.id);
+  res.json({ success: true, data, message: "Tranzaksiya o'chirildi" });
 });
