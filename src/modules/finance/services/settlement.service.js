@@ -241,14 +241,21 @@ const settleDriverImpl = async (driverId, userId = null) => {
 // summadan derived - chiqim yozuvi o'chgani uchun avtomatik tiklanadi).
 //   - kunlik planga bog'langan "to'lov" yozuvi (source: deposit/cashback)
 //   - shu planni qoplagan depozit OUT / keshbek PAYOUT auto chiqimlari (coverage.ref)
-// MUHIM: bu faqat haydovchining autoSettleDaily O'CHIRILGAN holatida ma'noli - aks
-// holda keyingi settleDriver darhol qayta qoplab qo'yadi (chaqiruvchi servis tekshiradi).
+// QULAYLIK (2026-06-24): bir vaqtning o'zida haydovchining `autoSettleDaily` ni ham
+// O'CHIRADI - aks holda settleDriver darhol qayta qoplab "loop" hosil bo'lardi. Shu
+// tariqa admin shunchaki qoplashni o'chiradi, alohida toggle bosmaydi.
 export const releaseDailyCoverage = (planId) =>
   withTransaction(async (session) => {
     const pid = toObjectId(planId);
     const plan = await DailyPlan.findById(pid).select("driver").session(session);
     if (!plan) throw new ApiError(404, "Kunlik plan topilmadi");
     const did = plan.driver;
+
+    // Avtomatik kunlik qoplashni o'chiramiz (yoqilgan bo'lsa) - qayta qoplab loop bo'lmasin.
+    await Driver.updateOne(
+      { _id: did, autoSettleDaily: { $ne: false } },
+      { $set: { autoSettleDaily: false } },
+    ).session(session);
 
     await Transaction.deleteMany({
       dailyPlan: pid,

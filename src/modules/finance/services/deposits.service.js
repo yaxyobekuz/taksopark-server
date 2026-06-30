@@ -147,10 +147,7 @@ export const deleteMovement = async (transactionId) => {
   const driverId = String(tx.driver);
 
   if (tx.auto && tx.coverage?.kind === "daily" && tx.type === DEPOSIT_TX_TYPE.OUT) {
-    const driver = await Driver.findById(tx.driver).select("autoSettleDaily");
-    if (driver?.autoSettleDaily !== false) {
-      throw new ApiError(409, "Avval shu haydovchining kunlik avtomatik qoplashini o'chiring");
-    }
+    // Qulaylik: releaseDailyCoverage haydovchining avto-qoplashini ham o'chiradi (loop yo'q).
     await releaseDailyCoverage(tx.coverage.ref);
     return { balance: await balanceForDriver(driverId) };
   }

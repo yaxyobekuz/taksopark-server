@@ -1,6 +1,5 @@
 import CashbackTransaction, { CASHBACK_TX_TYPE } from "../../../models/cashbackTransaction.model.js";
 import WorkPeriod, { TARIFF } from "../../../models/workPeriod.model.js";
-import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
 import { monthsForDriver } from "./cashbackAccrual.service.js";
@@ -155,10 +154,7 @@ export const deletePayout = async (transactionId) => {
   const driverId = String(tx.driver);
 
   if (tx.auto && tx.coverage?.kind === "daily" && tx.type === CASHBACK_TX_TYPE.PAYOUT) {
-    const driver = await Driver.findById(tx.driver).select("autoSettleDaily");
-    if (driver?.autoSettleDaily !== false) {
-      throw new ApiError(409, "Avval shu haydovchining kunlik avtomatik qoplashini o'chiring");
-    }
+    // Qulaylik: releaseDailyCoverage haydovchining avto-qoplashini ham o'chiradi (loop yo'q).
     await releaseDailyCoverage(tx.coverage.ref);
     return detailForDriver(driverId);
   }
