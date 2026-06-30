@@ -15,15 +15,21 @@ export const addDays = (date, days) => {
   return d;
 };
 
+// Tashkent kuni bo'yicha N oy qo'shadi (Tashkent oy-KUNINI saqlaydi; nishon oy qisqa
+// bo'lsa oxirgi kunga qisadi) va Tashkent yarim tunini qaytaradi.
+// MUHIM: avval UTC komponentlari bilan ishlardi - lekin Tashkent yarim tuni UTC'da
+// OLDINGI kun 19:00 bo'lgani uchun (UTC+5), oy boshi (Tashkent 1-kun) UTC'da oldingi
+// oyning 30/31-kuni bo'lib ko'rinardi. Natijada "keyingi oy boshi" 1 kun kam hisoblanib,
+// 31 kunlik oylar oxirgi kuni (31-may) oylik ko'rinishdan TUSHIB QOLARDI. Endi hisob
+// Tashkent kalendar maydonida bajariladi.
 export const addMonths = (date, months) => {
-  const d = new Date(date);
-  const targetMonth = d.getUTCMonth() + months;
-  const targetDay = d.getUTCDate();
-  d.setUTCDate(1);
-  d.setUTCMonth(targetMonth);
-  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-  d.setUTCDate(Math.min(targetDay, lastDay));
-  return d;
+  const shifted = new Date(startOfDayTashkent(date).getTime() + TZ_OFFSET_MS); // UTC maydonlari = Tashkent Y/M/D
+  const targetDay = shifted.getUTCDate();
+  shifted.setUTCDate(1);
+  shifted.setUTCMonth(shifted.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, 0)).getUTCDate();
+  shifted.setUTCDate(Math.min(targetDay, lastDay));
+  return new Date(shifted.getTime() - TZ_OFFSET_MS);
 };
 
 export const daysBetween = (from, to) => {
