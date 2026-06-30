@@ -86,84 +86,29 @@ const buildObligations = async (driverId, { includeDaily = true } = {}) => {
 const LABEL = { daily: "Kunlik ijara qoplandi", fine: "Jarima qoplandi", damage: "Zarar qoplandi" };
 
 // Berilgan majburiyatga (kind + ref, masalan jarima/zarar) bog'langan AVTOMATIK
-// qoplash chiqimlarini (depozit OUT, keshbek PAYOUT) teskari qaytaradi (§9 append-only).
-// Har biriga qarama-qarshi turdagi yangi yozuv: depozit OUT → IN, keshbek PAYOUT →
-// REVERSAL (ikkalasi ham reverses + auto bilan). IDEMPOTENT: allaqachon teskari
-// qilingan (reverses bilan ko'rsatilgan) yozuv qayta qaytarilmaydi.
-//
-// MUHIM: teskari yozuvga coverage QO'YILMAYDI (null). Ikki sabab: (1) coverageByRef
-// faqat OUT/PAYOUT ni yig'adi - teskari IN/REVERSAL undan o'z-o'zidan tushib, qoplangan
-// summa avtomatik kamayadi; (2) ledger coverage bo'lsa "Jarima qoplandi" deb yorliqlaydi -
-// teskari (kirim) yozuvda bu chalkash bo'lardi, shuning uchun "Qoplash bekor qilindi"
-// note ishlatiladi. Audit izi `reverses` (asl chiqim id) orqali saqlanadi.
+// qoplash chiqimlarini (depozit OUT, keshbek PAYOUT) to'g'ridan-to'g'ri O'CHIRADI -
+// pul manbaga qaytadi (balans Σ dan DERIVED, chiqim yozuvi o'chgani uchun avtomatik
+// tiklanadi). Avtomatik qoplash §11A bo'yicha DERIVED yozuv, shuning uchun teskari
+// (reversal) yozuv EMAS, hard-delete ishlatamiz - ledger toza qoladi.
 //
 // Ishlatilishi: jarima/zarar summasi o'zgarsa yoki o'chsa - eski coverage to'liq
-// qaytariladi, so'ng settleDriver yangi (kichraygan yoki nol) majburiyatni qaytadan qoplaydi.
-export const reverseCoverageFor = (driverId, kind, ref, userId = null) =>
+// o'chiriladi, so'ng settleDriver yangi (kichraygan yoki nol) majburiyatni qaytadan qoplaydi.
+export const clearCoverageFor = (driverId, kind, ref) =>
   withTransaction(async (session) => {
     const did = toObjectId(driverId);
     const refId = toObjectId(ref);
-
-    // --- Depozit OUT coverage qatorlari ---
-    const depOuts = await DepositTransaction.find({
+    await DepositTransaction.deleteMany({
       driver: did,
       type: DEPOSIT_TX_TYPE.OUT,
       "coverage.kind": kind,
       "coverage.ref": refId,
     }).session(session);
-    if (depOuts.length) {
-      const depReversed = new Set(
-        (
-          await DepositTransaction.find({ driver: did, reverses: { $ne: null } })
-            .select("reverses")
-            .session(session)
-        ).map((d) => String(d.reverses)),
-      );
-      const depDocs = depOuts
-        .filter((o) => !depReversed.has(String(o._id)))
-        .map((o) => ({
-          driver: did,
-          type: DEPOSIT_TX_TYPE.IN,
-          amount: o.amount,
-          reverses: o._id,
-          coverage: null,
-          auto: true,
-          note: "Qoplash bekor qilindi",
-          createdBy: userId,
-        }));
-      if (depDocs.length) await DepositTransaction.create(depDocs, { session });
-    }
-
-    // --- Keshbek PAYOUT coverage qatorlari (monthStart saqlanadi) ---
-    const cbOuts = await CashbackTransaction.find({
+    await CashbackTransaction.deleteMany({
       driver: did,
       type: CASHBACK_TX_TYPE.PAYOUT,
       "coverage.kind": kind,
       "coverage.ref": refId,
     }).session(session);
-    if (cbOuts.length) {
-      const cbReversed = new Set(
-        (
-          await CashbackTransaction.find({ driver: did, reverses: { $ne: null } })
-            .select("reverses")
-            .session(session)
-        ).map((c) => String(c.reverses)),
-      );
-      const cbDocs = cbOuts
-        .filter((o) => !cbReversed.has(String(o._id)))
-        .map((o) => ({
-          driver: did,
-          monthStart: o.monthStart,
-          type: CASHBACK_TX_TYPE.REVERSAL,
-          amount: o.amount,
-          reverses: o._id,
-          coverage: null,
-          auto: true,
-          note: "Qoplash bekor qilindi",
-          createdBy: userId,
-        }));
-      if (cbDocs.length) await CashbackTransaction.create(cbDocs, { session });
-    }
   });
 
 const settleDriverImpl = async (driverId, userId = null) => {
