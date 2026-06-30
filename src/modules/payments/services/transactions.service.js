@@ -82,31 +82,22 @@ export const createPayment = async (dailyPlanId, { amount, note }, currentUser) 
   return getPlanById(plan._id);
 };
 
-// Tuzatuvchi (teskari) tranzaksiya. Xato to'lovni o'chirmaymiz - teskari yozuv
-// qo'shamiz (append-only, audit izi saqlanadi - §9).
-export const reverseTransaction = async (transactionId, { note }, currentUser) => {
-  const original = await Transaction.findById(transactionId);
-  if (!original) throw new ApiError(404, "Tranzaksiya topilmadi");
-  if (original.type === TX_TYPE.REVERSAL) {
-    throw new ApiError(409, "Tuzatuvchi tranzaksiyani qayta tuzatib bo'lmaydi");
+// Tranzaksiyani BUTUNLAY o'chiradi (hard delete - reversal/tuzatish yozuvi YO'Q).
+// To'langan/qarz tranzaksiyalardan DERIVED, shuning uchun o'chirilgach o'z-o'zidan
+// to'g'ri qayta hisoblanadi. Ikki holat:
+//   - Avtomatik qoplash (source: deposit/cashback) - juftligi (manba chiqimi) bilan
+//     birga o'chiriladi va pul manbaga qaytadi (releaseAutoCoverage; faqat autoSettleDaily
+//     O'CHIRILGAN bo'lsa - aks holda darhol qayta qoplanardi).
+//   - Qo'lda kiritilgan to'lov (source: driver) - to'g'ridan-to'g'ri o'chiriladi.
+export const deleteTransaction = async (transactionId) => {
+  const tx = await Transaction.findById(transactionId);
+  if (!tx) throw new ApiError(404, "Tranzaksiya topilmadi");
+  const planId = tx.dailyPlan;
+  if (tx.source === TX_SOURCE.DEPOSIT || tx.source === TX_SOURCE.CASHBACK) {
+    return releaseAutoCoverage(planId);
   }
-
-  // Allaqachon teskari qilinganini tekshiramiz (ikki marta bekor qilinmasin).
-  const already = await Transaction.exists({ reverses: original._id });
-  if (already) throw new ApiError(409, "Bu tranzaksiya allaqachon bekor qilingan");
-
-  await Transaction.create({
-    dailyPlan: original.dailyPlan,
-    driver: original.driver,
-    date: original.date,
-    type: TX_TYPE.REVERSAL,
-    amount: original.amount,
-    reverses: original._id,
-    note: note || "",
-    createdBy: currentUser._id,
-  });
-
-  return getPlanById(original.dailyPlan);
+  await tx.deleteOne();
+  return getPlanById(planId);
 };
 
 // Kunlik plandagi AVTOMATIK (depozit/keshbek) qoplashni o'chiradi - pul manbaga

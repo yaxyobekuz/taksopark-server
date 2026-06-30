@@ -8,13 +8,12 @@ import {
   planIdSchema,
   listTransactionsSchema,
   createPaymentSchema,
-  reverseSchema,
 } from "./validators/payments.validator.js";
 import monthView from "./handlers/monthView.handler.js";
 import getPlan from "./handlers/getPlan.handler.js";
 import listTransactions from "./handlers/listTransactions.handler.js";
 import createPayment from "./handlers/createPayment.handler.js";
-import reverseTransaction from "./handlers/reverseTransaction.handler.js";
+import deleteTransaction from "./handlers/deleteTransaction.handler.js";
 import releaseAuto from "./handlers/releaseAuto.handler.js";
 
 const router = Router();
@@ -25,9 +24,9 @@ router.get("/plans/:id", requireAuth, requirePermission(PERMISSIONS.PAYMENTS_REA
 // Plandagi avtomatik (depozit/keshbek) qoplashni bekor qilish - pul manbaga qaytadi.
 router.post("/plans/:id/release-auto", requireAuth, requirePermission(PERMISSIONS.PAYMENTS_MANAGE), validate(planIdSchema), releaseAuto);
 
-// Tranzaksiyalar (append-only)
+// Tranzaksiyalar (o'chirish = hard delete; reversal/tuzatish yo'q)
 router.get("/transactions", requireAuth, requirePermission(PERMISSIONS.PAYMENTS_READ), validate(listTransactionsSchema), listTransactions);
 router.post("/transactions", requireAuth, requirePermission(PERMISSIONS.PAYMENTS_MANAGE), validate(createPaymentSchema), createPayment);
-router.post("/transactions/:id/reverse", requireAuth, requirePermission(PERMISSIONS.PAYMENTS_MANAGE), validate(reverseSchema), reverseTransaction);
+router.delete("/transactions/:id", requireAuth, requirePermission(PERMISSIONS.PAYMENTS_MANAGE), validate(planIdSchema), deleteTransaction);
 
 export default router;

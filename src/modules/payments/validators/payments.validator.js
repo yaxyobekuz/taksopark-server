@@ -36,10 +36,3 @@ export const createPaymentSchema = z.object({
     note: z.string().optional(),
   }),
 });
-
-export const reverseSchema = z.object({
-  params: z.object({ id: objectId }),
-  body: z.object({
-    note: z.string().optional(),
-  }),
-});
