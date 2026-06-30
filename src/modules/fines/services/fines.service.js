@@ -2,7 +2,7 @@ import Fine from "../../../models/fine.model.js";
 import Driver from "../../../models/driver.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { startOfDayTashkent } from "../../../utils/timezone.js";
-import { settleDriver, reverseCoverageFor } from "../../finance/services/settlement.service.js";
+import { settleDriver, clearCoverageFor } from "../../finance/services/settlement.service.js";
 import { carForDriverOnDate } from "../../payments/services/dailyPlans.service.js";
 
 export const list = async ({ driverId, carId, fromDate, toDate, page = 1, limit = 20 }) => {
@@ -71,10 +71,10 @@ export const update = async (id, body, currentUser) => {
   if (body.amount !== undefined) fine.amount = Number(body.amount);
   await fine.save();
 
-  // Summa o'zgarsa: eski coverage'ni to'liq teskari qaytaramiz, so'ng settlement
+  // Summa o'zgarsa: eski coverage o(chiriladi, so(ng settlement
   // yangi (kichraygan/oshgan) miqdorni qaytadan qoplaydi (§9, §10).
   if (amountChanged) {
-    await reverseCoverageFor(fine.driver, "fine", fine._id, currentUser._id);
+    await clearCoverageFor(fine.driver, "fine", fine._id);
     await settleDriver(fine.driver, currentUser._id);
   }
   return fine;
@@ -85,7 +85,7 @@ export const remove = async (id, currentUser) => {
   if (!fine) throw new ApiError(404, "Jarima topilmadi");
   const driverId = fine.driver;
   // Jarima o'chsa, undan qoplangan pul (depozit/keshbek) manbaga qaytarilishi shart (§9).
-  await reverseCoverageFor(driverId, "fine", fine._id, currentUser._id);
+  await clearCoverageFor(driverId, "fine", fine._id);
   await fine.deleteOne();
   await settleDriver(driverId, currentUser._id);
 };
