@@ -92,16 +92,13 @@ export const createMovement = async (driverId, { type, amount, note }, currentUs
   }
 
   if (type === DEPOSIT_TX_TYPE.OUT) {
-    // Naqd yechish IKKI cheklov bilan: (1) DEPOZIT manbasida shuncha pul bo'lsin
-    // (keshbek/balansdan "depozit chiqimi" yozib bo'lmaydi), (2) yechgach umumiy
-    // hisob qarzga tushmasin. Bog'lovchi chegara = min(depozit qoldig'i, available).
-    const [depositBal, available] = await Promise.all([
-      account.depositBalanceForDriver(driverId),
-      account.availableForDriver(driverId),
-    ]);
-    const cap = Math.min(depositBal, available);
-    if (value > cap) {
-      throw new ApiError(409, `Chiqim mavjud depozit qoldig'idan (${cap}) oshmasligi kerak`);
+    // Naqd yechish FAQAT depozit manbasidagi qoldiq (Σkirim−Σchiqim) bilan cheklanadi.
+    // Depozit - haydovchining puli: umumiy hisob qarzidan (to'lanmagan kunlik ijara)
+    // QAT'I NAZAR to'liq yechib olinadi (egasi qarori 2026-06-24, keshbek bilan bir xil).
+    // Yechgach hisob manfiyga tushsa - bu haqiqiy qarz sifatida ko'rinadi, cheklamaydi.
+    const depositBal = await account.depositBalanceForDriver(driverId);
+    if (value > depositBal) {
+      throw new ApiError(409, `Chiqim mavjud depozit qoldig'idan (${depositBal}) oshmasligi kerak`);
     }
   }
 
@@ -114,15 +111,13 @@ export const createMovement = async (driverId, { type, amount, note }, currentUs
   });
 
   // Konkurensiya himoyasi (§8 audit): bir vaqtda ikki chiqim (yoki settlement) bilan
-  // depozit manbasi YOKI umumiy hisob manfiyga tushsa - yangi yozuvni qaytarib olamiz.
+  // DEPOZIT manbasi manfiyga tushsa - yangi yozuvni qaytarib olamiz. Umumiy hisob
+  // manfiyga tushishi endi to'sqinlik qilmaydi (depozit qarzdan qat'i nazar yechiladi).
   if (type === DEPOSIT_TX_TYPE.OUT) {
-    const [depositBal, acc] = await Promise.all([
-      account.depositBalanceForDriver(driverId),
-      account.computeForDriver(driverId),
-    ]);
-    if (depositBal < 0 || acc.net < 0) {
+    const depositBal = await account.depositBalanceForDriver(driverId);
+    if (depositBal < 0) {
       await created.deleteOne();
-      throw new ApiError(409, "Chiqim mavjud balansdan oshib ketdi, qayta urinib ko'ring");
+      throw new ApiError(409, "Chiqim mavjud depozit balansidan oshib ketdi, qayta urinib ko'ring");
     }
   }
 
